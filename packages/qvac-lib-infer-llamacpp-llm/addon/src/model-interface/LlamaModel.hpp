@@ -21,6 +21,7 @@
 #include "LlmContext.hpp"
 #include "ModelMetadata.hpp"
 #include "runtime/RunPipeline.hpp"
+#include "runtime/policies/cache/CacheSessionPolicy.hpp"
 #include "runtime/policies/prompt/PromptPolicy.hpp"
 #include "common/chat.h"
 #include "qvac-lib-inference-addon-cpp/BlobsStream.hpp"
@@ -239,16 +240,6 @@ private:
     bool lastToolsTrimmed_ = false;
   };
 
-  struct ResolvedPrompt {
-    std::vector<common_chat_msg> chatMsgs;
-    std::vector<common_chat_tool> tools;
-    bool isCacheLoaded = false;
-    bool shouldResetAfterInference = true;
-  };
-  ResolvedPrompt resolveChatAndTools(
-      const Prompt& prompt,
-      const qvac_lib_inference_addon_llama::runtime::RuntimeDeps& deps);
-
   void commonParamsParse(
       const std::string& modelPath,
       std::unordered_map<std::string, std::string>& configFilemap,
@@ -287,6 +278,8 @@ private:
   std::shared_ptr<ReloadableState> state_;
   std::unique_ptr<qvac_lib_inference_addon_llama::runtime::RunPipeline>
       runPipeline_;
+  qvac_lib_inference_addon_llama::runtime::CacheSessionPolicy
+      cacheSessionPolicy_;
   qvac_lib_inference_addon_llama::runtime::PromptPolicy promptPolicy_;
   int64_t runtimeBackendDevice_ = 0;
 

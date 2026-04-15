@@ -22,7 +22,7 @@ Update this section after each completed step/commit.
 | 1 | Runtime Scaffolding | done | local working tree | 2026-04-15 | Added runtime RunRequest/RunPipeline scaffold and delegated processPrompt through pipeline with no logic migration |
 | 2 | Runtime State Facade | done | local working tree | 2026-04-15 | Added RuntimeDeps/RunResult facade and threaded through RunPipeline/LlamaModel without moving runtime logic |
 | 3 | Prompt Policy | done | local working tree | 2026-04-15 | Added runtime PromptPolicy and delegated LlamaModel prompt parsing/validation to it while preserving legacy prompt errors/constraints |
-| 4 | Cache Session Policy | planned | - | - | - |
+| 4 | Cache Session Policy | done | local working tree | 2026-04-15 | Added runtime cache session policy and delegated LlamaModel cache session resolution through it with no cache behavior changes |
 | 5 | Generation Params Policy | planned | - | - | - |
 | 6 | Post-Run Policy | planned | - | - | - |
 | 7 | Model Profiles | planned | - | - | - |
@@ -69,6 +69,23 @@ Append new entries at the top (most recent first).
 - Notes/Risks:
 - Next:
 -->
+
+#### Progress Update - Commit 4: Cache Session Policy
+
+- Status: done
+- Scope completed:
+  - Added `addon/src/runtime/policies/cache/CacheSessionPolicy.hpp` and `addon/src/runtime/policies/cache/CacheSessionPolicy.cpp` to own cache session resolution decisions for no key/same key/switch key paths via `CacheManager`.
+  - Updated `LlamaModel::processPromptImpl` to delegate cache session preparation through `CacheSessionPolicy::resolveSession(...)` and removed cache decision logic from `LlamaModel::resolveChatAndTools`.
+  - Wired build/test targets to compile the new policy source in `CMakeLists.txt` and `test/unit/CMakeLists.txt`.
+- Tests run:
+  - `bare-make build --target addon-test` -> passed
+  - `./build/test/unit/addon-test --gtest_filter=CacheManagementTest.*:CacheManagementQwen3Test.*` -> failed (known baseline `CacheManagementQwen3Test` tools_compact cases from Commit 0), with non-Qwen cache suite still passing
+  - `./build/test/unit/addon-test --gtest_filter=CacheManagementTest.*` -> all 21 tests passed; process exits non-zero due existing Vulkan LeakSanitizer leak report in this environment
+- Notes/Risks:
+  - Qwen3 tools_compact cache-path failures remain aligned with baseline risk areas documented earlier and were not introduced by this extraction.
+  - LeakSanitizer Vulkan backend leak remains environment baseline noise for local unit runs.
+- Next:
+  - Commit 5 - Generation Params Policy
 
 #### Progress Update - Commit 3: Prompt Policy
 

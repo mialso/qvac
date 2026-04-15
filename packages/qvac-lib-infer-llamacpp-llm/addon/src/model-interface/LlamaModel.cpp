@@ -483,30 +483,6 @@ std::any LlamaModel::process(const std::any& input) {
   return processPrompt(prompt);
 }
 
-LlamaModel::ResolvedPrompt
-LlamaModel::resolveChatAndTools(
-    const Prompt& prompt,
-    const qvac_lib_inference_addon_llama::runtime::RuntimeDeps& deps) {
-  ResolvedPrompt resolved;
-  if (deps.cacheManager != nullptr) {
-    resolved.isCacheLoaded = deps.cacheManager->handleCache(
-        resolved.chatMsgs,
-        resolved.tools,
-        prompt.input,
-        deps.formatPrompt,
-        prompt.cacheKey);
-    resolved.shouldResetAfterInference =
-        deps.cacheManager->isCacheDisabled() ||
-        !deps.cacheManager->wasCacheUsedInLastPrompt();
-  } else {
-    auto formatted = deps.formatPrompt(prompt.input);
-    resolved.chatMsgs = std::move(formatted.first);
-    resolved.tools = std::move(formatted.second);
-    resolved.shouldResetAfterInference = true;
-  }
-  return resolved;
-}
-
 std::string LlamaModel::processPrompt(const Prompt& prompt) {
   std::shared_lock lock(stateMtx_);
   qvac_lib_inference_addon_llama::runtime::RuntimeDeps runtimeDeps{
@@ -543,7 +519,8 @@ LlamaModel::processPromptImpl(
   }
 
   std::string out;
-  ResolvedPrompt resolved = resolveChatAndTools(prompt, deps);
+  auto resolved =
+      cacheSessionPolicy_.resolveSession(prompt.input, prompt.cacheKey, deps);
 
   if (resolved.shouldResetAfterInference &&
       context.getNPast() > 0) {
