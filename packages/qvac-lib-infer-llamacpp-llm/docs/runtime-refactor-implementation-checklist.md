@@ -25,7 +25,7 @@ Update this section after each completed step/commit.
 | 4 | Cache Session Policy | done | local working tree | 2026-04-15 | Added runtime cache session policy and delegated LlamaModel cache session resolution through it with no cache behavior changes |
 | 5 | Generation Params Policy | done | local working tree | 2026-04-15 | Added runtime generation params policy and delegated override apply/restore lifecycle from LlamaModel |
 | 6 | Post-Run Policy | done | local working tree | 2026-04-15 | Added runtime post-run policy and delegated trim/save/reset finalization from LlamaModel |
-| 7 | Model Profiles | planned | - | - | - |
+| 7 | Model Profiles | done | local working tree | 2026-04-15 | Added profile layer and routed Qwen3/template capability checks through profile hooks |
 | 8 | Pipeline as Primary Orchestrator | planned | - | - | - |
 | 9 | Context Folder Normalization (optional) | planned | - | - | - |
 | 10 | Cleanup + Dead Code Removal | planned | - | - | - |
@@ -69,6 +69,24 @@ Append new entries at the top (most recent first).
 - Notes/Risks:
 - Next:
 -->
+
+#### Progress Update - Commit 7: Model Profiles
+
+- Status: done
+- Scope completed:
+  - Added `addon/src/profile/ModelProfile.hpp`, `addon/src/profile/ModelProfile.cpp`, `addon/src/profile/DefaultProfile.*`, and `addon/src/profile/Qwen3Profile.*` to centralize model-family detection, capability exposure, and chat template selection hooks.
+  - Updated `addon/src/utils/ChatTemplateUtils.cpp` to delegate Qwen3 detection/template selection through `profile::createProfileFromModel(...)` while preserving manual override precedence.
+  - Updated `addon/src/model-interface/LlamaModel.cpp` tools_compact gating to use `profile::createProfileFromMetadata(...)` capability checks, and wired CMake/test targets plus `test/unit/test_model_profile.cpp`.
+- Tests run:
+  - `bare-make build --target addon-test` -> passed
+  - `./build/test/unit/addon-test --gtest_filter=ModelProfileTest.*` -> all 7 tests passed
+  - `./build/test/unit/addon-test --gtest_filter=ChatTemplateUtilsTest.*` -> all 17 tests passed
+  - `./build/test/unit/addon-test --gtest_filter=ModelToolsQwen3Test.*` -> 6/7 passed, with existing baseline failure in `ModelToolsQwen3Test.CacheEnabledWithToolMessage`; process also reports known Vulkan LeakSanitizer leak noise
+- Notes/Risks:
+  - Behavior remains profile-equivalent for default and Qwen3 paths; reasoning EOS behavior is intentionally unchanged and remains in `TextLlmContext` per plan.
+  - `ModelToolsQwen3Test.CacheEnabledWithToolMessage` remains a pre-existing baseline failure and was not introduced by this commit.
+- Next:
+  - Commit 8 - Pipeline as Primary Orchestrator
 
 #### Progress Update - Commit 6: Post-Run Policy
 

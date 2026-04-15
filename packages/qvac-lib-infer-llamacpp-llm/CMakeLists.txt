@@ -66,6 +66,9 @@ endif()
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/profile/DefaultProfile.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/profile/ModelProfile.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/profile/Qwen3Profile.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/RunPipeline.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/cache/CacheSessionPolicy.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/generation/GenerationParamsPolicy.cpp
@@ -117,6 +120,9 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/profile/DefaultProfile.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/profile/ModelProfile.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/profile/Qwen3Profile.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/RunPipeline.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/cache/CacheSessionPolicy.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/generation/GenerationParamsPolicy.cpp

@@ -34,6 +34,7 @@
 #include "MtmdLlmContext.hpp"
 #include "TextLlmContext.hpp"
 #include "addon/LlmErrors.hpp"
+#include "profile/ModelProfile.hpp"
 #include "qvac-lib-inference-addon-cpp/LlamacppUtils.hpp"
 #include "runtime/RunRequest.hpp"
 #include "utils/BackendSelection.hpp"
@@ -702,8 +703,10 @@ void LlamaModel::commonParamsParse(
   }
 
   if (outToolsCompact) {
-    auto arch = metadata_.tryGetString("general.architecture");
-    if (!arch.has_value() || arch.value() != "qwen3") {
+    auto modelProfile =
+        qvac_lib_inference_addon_llama::profile::createProfileFromMetadata(
+            metadata_);
+    if (!modelProfile->capabilities().supportsToolsCompact) {
       QLOG_IF(
           Priority::WARNING,
           "[LlamaModel] tools_compact is only supported for Qwen3 models, "

@@ -32,12 +32,16 @@ add_executable(
   test_qwen3_reasoning_utils.cpp
   test_qwen_template.cpp
   test_qwen3_tools_dynamic_template.cpp
+  test_model_profile.cpp
   test_logging_macros.cpp
   test_llama_lazy_init_backend.cpp
   test_borrow_tracked_shared_buffer.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/profile/DefaultProfile.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/profile/ModelProfile.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/profile/Qwen3Profile.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/runtime/RunPipeline.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/runtime/policies/cache/CacheSessionPolicy.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/runtime/policies/generation/GenerationParamsPolicy.cpp

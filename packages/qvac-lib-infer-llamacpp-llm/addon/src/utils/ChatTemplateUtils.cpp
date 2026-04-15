@@ -1,11 +1,8 @@
 #include "ChatTemplateUtils.hpp"
 
-#include <algorithm>
-
 #include <llama.h>
 
-#include "Qwen3ToolsDynamicTemplate.hpp"
-#include "QwenTemplate.hpp"
+#include "profile/ModelProfile.hpp"
 #include "utils/LoggingMacros.hpp"
 
 using namespace qvac_lib_inference_addon_cpp::logger;
@@ -14,63 +11,17 @@ namespace qvac_lib_inference_addon_llama {
 namespace utils {
 
 bool isQwen3Model(const ::llama_model* model) {
-  if (model == nullptr) {
-    return false;
-  }
-
-  // Check model name metadata
-  char modelName[256] = {0};
-  int32_t len = llama_model_meta_val_str(
-      model, "general.name", modelName, sizeof(modelName));
-
-  if (len > 0 && len < sizeof(modelName)) {
-    modelName[len] = '\0';
-    std::string nameStr(modelName);
-    std::transform(
-        nameStr.begin(), nameStr.end(), nameStr.begin(), [](unsigned char c) {
-          return std::tolower(c);
-        });
-
-    if (nameStr.find("qwen3") != std::string::npos ||
-        nameStr.find("qwen-3") != std::string::npos) {
-      return true;
-    }
-  }
-
-  // Check architecture metadata
-  char arch[64] = {0};
-  len = llama_model_meta_val_str(
-      model, "general.architecture", arch, sizeof(arch));
-
-  if (len > 0 && len < sizeof(arch)) {
-    arch[len] = '\0';
-    std::string archStr(arch);
-    std::transform(
-        archStr.begin(), archStr.end(), archStr.begin(), [](unsigned char c) {
-          return std::tolower(c);
-        });
-
-    if (archStr.find("qwen3") != std::string::npos) {
-      return true;
-    }
-  }
-
-  return false;
+  auto profile =
+      qvac_lib_inference_addon_llama::profile::createProfileFromModel(model);
+  return profile->capabilities().isQwen3;
 }
 
 std::string getChatTemplateForModel(
     const ::llama_model* model, const std::string& manualOverride,
     bool toolsCompact) {
-  if (!manualOverride.empty()) {
-    return manualOverride;
-  }
-
-  if (isQwen3Model(model)) {
-    return toolsCompact ? getToolsDynamicQwen3Template()
-                        : getFixedQwen3Template();
-  }
-
-  return "";
+  auto profile =
+      qvac_lib_inference_addon_llama::profile::createProfileFromModel(model);
+  return profile->selectChatTemplate(manualOverride, toolsCompact);
 }
 
 std::string getChatTemplate(
