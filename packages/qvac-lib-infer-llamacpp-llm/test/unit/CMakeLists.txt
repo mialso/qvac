@@ -41,6 +41,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/runtime/RunPipeline.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/runtime/policies/cache/CacheSessionPolicy.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/runtime/policies/generation/GenerationParamsPolicy.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/runtime/policies/postrun/PostRunPolicy.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/runtime/policies/prompt/PromptPolicy.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp

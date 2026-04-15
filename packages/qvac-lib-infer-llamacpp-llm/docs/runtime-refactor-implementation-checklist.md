@@ -24,7 +24,7 @@ Update this section after each completed step/commit.
 | 3 | Prompt Policy | done | local working tree | 2026-04-15 | Added runtime PromptPolicy and delegated LlamaModel prompt parsing/validation to it while preserving legacy prompt errors/constraints |
 | 4 | Cache Session Policy | done | local working tree | 2026-04-15 | Added runtime cache session policy and delegated LlamaModel cache session resolution through it with no cache behavior changes |
 | 5 | Generation Params Policy | done | local working tree | 2026-04-15 | Added runtime generation params policy and delegated override apply/restore lifecycle from LlamaModel |
-| 6 | Post-Run Policy | planned | - | - | - |
+| 6 | Post-Run Policy | done | local working tree | 2026-04-15 | Added runtime post-run policy and delegated trim/save/reset finalization from LlamaModel |
 | 7 | Model Profiles | planned | - | - | - |
 | 8 | Pipeline as Primary Orchestrator | planned | - | - | - |
 | 9 | Context Folder Normalization (optional) | planned | - | - | - |
@@ -69,6 +69,24 @@ Append new entries at the top (most recent first).
 - Notes/Risks:
 - Next:
 -->
+
+#### Progress Update - Commit 6: Post-Run Policy
+
+- Status: done
+- Scope completed:
+  - Added `addon/src/runtime/policies/postrun/PostRunPolicy.hpp` and `addon/src/runtime/policies/postrun/PostRunPolicy.cpp` to own post-generation tools_compact boundary checks, trim decisions, optional cache persistence, and reset orchestration.
+  - Updated `LlamaModel::processPromptImpl` to delegate post-run finalization to `PostRunPolicy::finalize(...)` and keep runtime debug stats (`nPastBeforeTools`, `toolsTrimmed`) synchronized from policy output.
+  - Wired build/test targets to compile the new policy source in `CMakeLists.txt` and `test/unit/CMakeLists.txt`.
+- Tests run:
+  - `bare-make build --target addon-test` -> passed
+  - `./build/test/unit/addon-test --gtest_filter=ModelToolsQwen3Test.ToolsCompactAllowsToolsAfterToolMessage` -> 1/1 test passed; process exits non-zero due existing Vulkan LeakSanitizer leak report in this environment
+  - `./build/test/unit/addon-test --gtest_filter=LlmContextBaseTest.*` -> all 10 tests passed; process exits non-zero due existing Vulkan LeakSanitizer leak report in this environment
+  - `./build/test/unit/addon-test --gtest_filter=CacheManagementTest.*` -> all 21 tests passed; process exits non-zero due existing Vulkan LeakSanitizer leak report in this environment
+- Notes/Risks:
+  - Behavior is intended to remain identical; this commit extracts post-run orchestration boundaries without altering tools_compact/caching/reset semantics.
+  - LeakSanitizer Vulkan backend leak remains baseline environment noise for local unit runs.
+- Next:
+  - Commit 7 - Model Profiles
 
 #### Progress Update - Commit 5: Generation Params Policy
 

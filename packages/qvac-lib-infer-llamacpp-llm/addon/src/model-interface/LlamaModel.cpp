@@ -584,49 +584,19 @@ LlamaModel::processPromptImpl(
   if (!prompt.outputCallback) {
     out = oss.str();
   }
-  auto& dts = context.dynamicToolsState();
-  // Capture nPastBeforeTools before postInfer cleanup for stats reporting
-  state_->lastNPastBeforeTools_ = dts.nPastBeforeTools();
-  state_->lastToolsTrimmed_ = false;
-  const llama_pos firstMsgTokens = context.getFirstMsgTokens();
-
-  if (dts.hasDegenerateToolBoundary(firstMsgTokens)) {
-    QLOG_IF(
-        Priority::WARNING,
-        string_format(
-            "[LlamaModel] tools_compact degenerate boundary at first message "
-            "(nPastBeforeTools=%d, firstMsgTokens=%d); skipping "
-            "post-generation "
-            "tools trim\n",
-            dts.nPastBeforeTools(),
-            firstMsgTokens));
-    dts.reset();
-  }
-
-  if (dts.hasUsableToolBoundary(firstMsgTokens) &&
-      context.getNPast() > dts.nPastBeforeTools()) {
-    // Check captured output for tool calls. In streaming mode oss has
-    // the text; in non-streaming mode out already has it.
-    std::string ossStr = needsOutputCapture ? oss.str() : std::string();
-    const std::string& outputToCheck = needsOutputCapture ? ossStr : out;
-    bool hasToolCall = outputToCheck.find("<tool_call>") != std::string::npos;
-    if (!hasToolCall) {
-      state_->lastToolsTrimmed_ = true;
-      context.removeLastNTokens(context.getNPast() - dts.nPastBeforeTools());
-      dts.reset();
-      if (context.getFirstMsgTokens() > context.getNPast()) {
-        context.setFirstMsgTokens(context.getNPast());
-      }
-    }
-  }
-  if (prompt.saveCacheToDisk && deps.cacheManager != nullptr &&
-      deps.cacheManager->hasActiveCache()) {
-    deps.cacheManager->saveCache();
-  }
-
-  if (resolved.shouldResetAfterInference) {
-    resetState(false);
-  }
+  std::string capturedOutput = needsOutputCapture ? oss.str() : std::string();
+  auto postRun = postRunPolicy_.finalize(
+      {.context = context,
+       .cacheManager = deps.cacheManager,
+       .saveCacheToDisk = prompt.saveCacheToDisk,
+       .shouldResetAfterInference = resolved.shouldResetAfterInference,
+       .outputCaptured = needsOutputCapture,
+       .output = out,
+       .capturedOutput = capturedOutput,
+       .resetState = [this](bool resetStats) { this->resetState(resetStats); }});
+  // Keep debug stats in model state while policy owns boundary decisions.
+  state_->lastNPastBeforeTools_ = postRun.nPastBeforeTools;
+  state_->lastToolsTrimmed_ = postRun.toolsTrimmed;
   result.output = out;
   result.resetAfterRun = resolved.shouldResetAfterInference;
   result.generatedTokens = true;
