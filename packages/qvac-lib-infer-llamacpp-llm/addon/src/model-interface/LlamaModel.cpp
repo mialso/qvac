@@ -38,7 +38,6 @@
 #include "runtime/RunRequest.hpp"
 #include "utils/BackendSelection.hpp"
 #include "utils/LoggingMacros.hpp"
-#include "utils/ScopeGuard.hpp"
 #include "utils/SharedSnapshot.hpp"
 
 using namespace qvac_lib_inference_addon_llama::errors;
@@ -534,9 +533,8 @@ LlamaModel::processPromptImpl(
     return result;
   }
 
-  auto restore =
-      context.applyGenerationParams(prompt.generationParams);
-  ScopeGuard paramsGuard([&] { restore(); });
+  auto paramsGuard =
+      generationParamsPolicy_.applyOverrides(context, prompt.generationParams);
 
   bool evalOk =
       resolved.tools.empty()

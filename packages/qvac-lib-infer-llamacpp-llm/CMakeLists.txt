@@ -68,6 +68,7 @@ endif()
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/RunPipeline.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/cache/CacheSessionPolicy.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/generation/GenerationParamsPolicy.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/prompt/PromptPolicy.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
@@ -117,6 +118,7 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/RunPipeline.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/cache/CacheSessionPolicy.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/generation/GenerationParamsPolicy.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/prompt/PromptPolicy.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp

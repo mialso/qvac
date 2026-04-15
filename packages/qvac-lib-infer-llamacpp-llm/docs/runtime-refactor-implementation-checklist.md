@@ -23,7 +23,7 @@ Update this section after each completed step/commit.
 | 2 | Runtime State Facade | done | local working tree | 2026-04-15 | Added RuntimeDeps/RunResult facade and threaded through RunPipeline/LlamaModel without moving runtime logic |
 | 3 | Prompt Policy | done | local working tree | 2026-04-15 | Added runtime PromptPolicy and delegated LlamaModel prompt parsing/validation to it while preserving legacy prompt errors/constraints |
 | 4 | Cache Session Policy | done | local working tree | 2026-04-15 | Added runtime cache session policy and delegated LlamaModel cache session resolution through it with no cache behavior changes |
-| 5 | Generation Params Policy | planned | - | - | - |
+| 5 | Generation Params Policy | done | local working tree | 2026-04-15 | Added runtime generation params policy and delegated override apply/restore lifecycle from LlamaModel |
 | 6 | Post-Run Policy | planned | - | - | - |
 | 7 | Model Profiles | planned | - | - | - |
 | 8 | Pipeline as Primary Orchestrator | planned | - | - | - |
@@ -69,6 +69,21 @@ Append new entries at the top (most recent first).
 - Notes/Risks:
 - Next:
 -->
+
+#### Progress Update - Commit 5: Generation Params Policy
+
+- Status: done
+- Scope completed:
+  - Added `addon/src/runtime/policies/generation/GenerationParamsPolicy.hpp` and `addon/src/runtime/policies/generation/GenerationParamsPolicy.cpp` to own per-run generation parameter override apply/restore lifecycle via a move-only scope guard.
+  - Updated `LlamaModel::processPromptImpl` to delegate generation override orchestration to `GenerationParamsPolicy::applyOverrides(...)` while preserving `TextLlmContext`/`MtmdLlmContext` generation parameter implementations.
+  - Wired build/test targets to compile the new policy source in `CMakeLists.txt` and `test/unit/CMakeLists.txt`.
+- Tests run:
+  - `bare-make build --target addon-test` -> passed
+  - `./build/test/unit/addon-test --gtest_filter=TextLlmContextTest.*` -> all 18 tests passed; process exits non-zero due existing Vulkan LeakSanitizer leak report in this environment
+- Notes/Risks:
+  - Behavior is intended to remain identical; this commit only extracts orchestration boundaries without altering context-level generation override logic.
+- Next:
+  - Commit 6 - Post-Run Policy
 
 #### Progress Update - Commit 4: Cache Session Policy
 
