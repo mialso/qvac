@@ -22,6 +22,7 @@
 #include "LlamaLazyInitializeBackend.hpp"
 #include "LlmContext.hpp"
 #include "ModelMetadata.hpp"
+#include "runtime/RunPipeline.hpp"
 #include "common/chat.h"
 #include "qvac-lib-inference-addon-cpp/BlobsStream.hpp"
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
@@ -280,6 +281,8 @@ private:
   /// only in reload()
   mutable std::shared_mutex stateMtx_;
   std::shared_ptr<ReloadableState> state_;
+  std::unique_ptr<qvac_lib_inference_addon_llama::runtime::RunPipeline>
+      runPipeline_;
   int64_t runtimeBackendDevice_ = 0;
 
   bool isBitnetModel() const;

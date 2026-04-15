@@ -36,6 +36,7 @@
 #include "TextLlmContext.hpp"
 #include "addon/LlmErrors.hpp"
 #include "qvac-lib-inference-addon-cpp/LlamacppUtils.hpp"
+#include "runtime/RunRequest.hpp"
 #include "utils/BackendSelection.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/ScopeGuard.hpp"
@@ -208,7 +209,10 @@ LlamaModel::LlamaModel(
       constructionArgs_{
           std::move(modelPath),
           std::move(projectionPath),
-          std::move(configFilemap)} {
+          std::move(configFilemap)},
+      runPipeline_(
+          std::make_unique<
+              qvac_lib_inference_addon_llama::runtime::RunPipeline>()) {
   setInitLoader(InitLoader::LOADER_TYPE::DELAYED);
 }
 
@@ -506,7 +510,10 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
 
 std::string LlamaModel::processPrompt(const Prompt& prompt) {
   std::shared_lock lock(stateMtx_);
-  return processPromptImpl(prompt);
+  qvac_lib_inference_addon_llama::runtime::RunRequest request{
+      .executeLegacyRun = [this, &prompt]() { return processPromptImpl(prompt); }
+  };
+  return runPipeline_->run(request);
 }
 
 std::string LlamaModel::processPromptImpl(const Prompt& prompt) {

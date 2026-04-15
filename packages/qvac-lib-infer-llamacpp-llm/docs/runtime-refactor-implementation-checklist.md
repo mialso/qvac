@@ -19,7 +19,7 @@ Update this section after each completed step/commit.
 | Commit | Title | Status | Branch/Commit | Date | Notes |
 | --- | --- | --- | --- | --- | --- |
 | 0 | Baseline Safety Net | done | local baseline (no code changes) | 2026-04-15 | Sharded tests fail when shard models are absent; baseline captured before refactor |
-| 1 | Runtime Scaffolding | planned | - | - | - |
+| 1 | Runtime Scaffolding | done | local working tree | 2026-04-15 | Added runtime RunRequest/RunPipeline scaffold and delegated processPrompt through pipeline with no logic migration |
 | 2 | Runtime State Facade | planned | - | - | - |
 | 3 | Prompt Policy | planned | - | - | - |
 | 4 | Cache Session Policy | planned | - | - | - |
@@ -69,6 +69,21 @@ Append new entries at the top (most recent first).
 - Notes/Risks:
 - Next:
 -->
+
+#### Progress Update - Commit 1: Runtime Scaffolding
+
+- Status: done
+- Scope completed:
+  - Added `addon/src/runtime/RunRequest.hpp`, `addon/src/runtime/RunPipeline.hpp`, and `addon/src/runtime/RunPipeline.cpp`.
+  - Wired `LlamaModel::processPrompt` to delegate through `RunPipeline` while preserving the existing `processPromptImpl` execution path.
+  - Updated build/test source lists to compile the new runtime scaffold (`CMakeLists.txt`, `test/unit/CMakeLists.txt`).
+- Tests run:
+  - `npm run test:cpp` -> failed on known baseline/environment-dependent tests, but runtime scaffolding compiled/linked and full suite executed.
+- Notes/Risks:
+  - Observed failures align with known baseline categories from Commit 0 (tools-compact/cache/sharded-model related), plus `LlamaModelTest.ReloadThrowsForStreamedShardedModel` in this environment.
+  - No new compile or link regressions after wiring `RunPipeline`.
+- Next:
+  - Commit 2 - Runtime State Facade
 
 #### Progress Update - Commit 0: Baseline Safety Net
 
