@@ -487,13 +487,16 @@ std::string LlamaModel::processPrompt(const Prompt& prompt) {
   std::shared_lock lock(stateMtx_);
   state_->lastRunWasPrefill_ = prompt.prefill;
 
+  // Runtime boundary: LlamaModel wires dependencies and delegates run stages
+  // to RunPipeline/policies to keep orchestration centralized.
   qvac_lib_inference_addon_llama::runtime::RuntimeDeps runtimeDeps{
       .context = state_->llmContext_.get(),
       .cacheManager =
           state_->cacheManager_.has_value() ? &state_->cacheManager_.value()
                                             : nullptr,
       .formatPrompt = [this](const std::string& inputPrompt) {
-        return this->formatPrompt(inputPrompt);
+        return promptPolicy_.resolvePrompt(
+            inputPrompt, *state_->llmContext_, state_->isTextLlm_);
       }};
   qvac_lib_inference_addon_llama::runtime::RunRequest request{
       .deps = std::move(runtimeDeps),
@@ -853,11 +856,6 @@ void LlamaModel::commonParamsParse(
             __func__,
             params.rope_freq_scale));
   }
-}
-// NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
-std::pair<std::vector<common_chat_msg>, std::vector<common_chat_tool>>
-LlamaModel::formatPrompt(const std::string& input) {
-  return promptPolicy_.resolvePrompt(input, *state_->llmContext_, state_->isTextLlm_);
 }
 
 void LlamaModel::resetState(bool resetStats) {

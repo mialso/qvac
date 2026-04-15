@@ -24,8 +24,6 @@ struct RuntimeDeps {
 
 struct RunResult {
   std::string output;
-  bool resetAfterRun = false;
-  bool generatedTokens = false;
 };
 
 } // namespace qvac_lib_inference_addon_llama::runtime

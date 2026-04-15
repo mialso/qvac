@@ -28,7 +28,7 @@ Update this section after each completed step/commit.
 | 7 | Model Profiles | done | local working tree | 2026-04-15 | Added profile layer and routed Qwen3/template capability checks through profile hooks |
 | 8 | Pipeline as Primary Orchestrator | done | local working tree | 2026-04-15 | RunPipeline now owns run-stage orchestration; LlamaModel reduced to request assembly/lifecycle adapter |
 | 9 | Context Folder Normalization (optional) | done | local working tree | 2026-04-15 | Added normalized `context/*` entrypoints and switched includes/CMake test targets to context paths without runtime logic changes |
-| 10 | Cleanup + Dead Code Removal | planned | - | - | - |
+| 10 | Cleanup + Dead Code Removal | done | local working tree | 2026-04-15 | Removed obsolete LlamaModel prompt wrapper + dead RunResult flags; added orchestration boundary comments |
 
 Status values:
 
@@ -69,6 +69,22 @@ Append new entries at the top (most recent first).
 - Notes/Risks:
 - Next:
 -->
+
+#### Progress Update - Commit 10: Cleanup + Dead Code Removal
+
+- Status: done
+- Scope completed:
+  - Removed obsolete `LlamaModel::formatPrompt(...)` wrapper and delegated prompt-policy formatting directly through the runtime dependency callback, eliminating duplicate prompt path ownership.
+  - Removed unused `RunResult` flags (`resetAfterRun`, `generatedTokens`) and their assignments in `RunPipeline`, leaving only the output payload consumed by callers.
+  - Added short architecture comments at runtime orchestration entrypoints (`LlamaModel::processPrompt` and `RunPipeline::run`) to document adapter-vs-orchestrator boundaries.
+- Tests run:
+  - `bare-make build --target addon-test` -> passed
+  - `./build/test/unit/addon-test --gtest_filter=LlamaModelTest.*` -> 41/42 tests passed with known baseline failure `LlamaModelTest.ReloadThrowsForStreamedShardedModel` (missing sharded model asset); process also exits non-zero due known Vulkan LeakSanitizer report
+  - `./build/test/unit/addon-test --gtest_filter=CacheManagementTest.*` -> all 21 tests passed; process exits non-zero due known Vulkan LeakSanitizer report
+- Notes/Risks:
+  - Scope is cleanup-only; no intended behavior changes.
+- Next:
+  - Runtime refactor checklist complete (Commits 0-10 done)
 
 #### Progress Update - Commit 9: Context Folder Normalization (optional)
 

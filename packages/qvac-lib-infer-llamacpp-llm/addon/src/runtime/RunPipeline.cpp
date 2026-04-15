@@ -38,6 +38,8 @@ RunResult RunPipeline::run(const RunRequest& request) const {
   RunResult result;
   LlmContext& context = *request.deps.context;
 
+  // Stage orchestrator: keep run flow explicit (cache -> eval -> generate ->
+  // finalize) and keep context/model classes focused on primitives.
   // Reset per-inference slide counter so it does not leak across runs.
   context.resetNSlides();
 
@@ -56,7 +58,6 @@ RunResult RunPipeline::run(const RunRequest& request) const {
   if (resolved.chatMsgs.empty() && resolved.tools.empty()) {
     QLOG_IF(Priority::INFO, "No messages to process - returning early\n");
     result.output = out;
-    result.resetAfterRun = resolved.shouldResetAfterInference;
     return result;
   }
 
@@ -78,13 +79,11 @@ RunResult RunPipeline::run(const RunRequest& request) const {
         Priority::DEBUG,
         "Inference was interrupted during prompt evaluation\n");
     result.output = out;
-    result.resetAfterRun = resolved.shouldResetAfterInference;
     return result;
   }
 
   if (request.prefill) {
     result.output = out;
-    result.resetAfterRun = resolved.shouldResetAfterInference;
     return result;
   }
 
@@ -127,8 +126,6 @@ RunResult RunPipeline::run(const RunRequest& request) const {
   }
 
   result.output = out;
-  result.resetAfterRun = resolved.shouldResetAfterInference;
-  result.generatedTokens = true;
   return result;
 }
 

@@ -243,14 +243,6 @@ private:
       common_params& params, std::optional<int>& outAdrenoVersion,
       bool& outToolsCompact);
 
-  /**
-   * The Format prompt method. It formats the prompt json to chat messages.
-   *
-   * @param input - input prompt.
-   * @return formatted chat messages and tools.
-   */
-  std::pair<std::vector<common_chat_msg>, std::vector<common_chat_tool>>
-  formatPrompt(const std::string& input);
   void resetState(bool resetStats = true);
   std::unique_ptr<LlmContext> createContext(
       std::string&& projectionPath, common_params& params,
