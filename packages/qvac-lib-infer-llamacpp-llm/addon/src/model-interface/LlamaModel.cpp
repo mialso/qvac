@@ -485,22 +485,22 @@ std::any LlamaModel::process(const std::any& input) {
 }
 
 LlamaModel::ResolvedPrompt
-LlamaModel::resolveChatAndTools(const Prompt& prompt) {
+LlamaModel::resolveChatAndTools(
+    const Prompt& prompt,
+    const qvac_lib_inference_addon_llama::runtime::RuntimeDeps& deps) {
   ResolvedPrompt resolved;
-  if (state_->cacheManager_.has_value()) {
-    resolved.isCacheLoaded = state_->cacheManager_->handleCache(
+  if (deps.cacheManager != nullptr) {
+    resolved.isCacheLoaded = deps.cacheManager->handleCache(
         resolved.chatMsgs,
         resolved.tools,
         prompt.input,
-        [this](const std::string& inputPrompt) {
-          return this->formatPrompt(inputPrompt);
-        },
+        deps.formatPrompt,
         prompt.cacheKey);
     resolved.shouldResetAfterInference =
-        state_->cacheManager_->isCacheDisabled() ||
-        !state_->cacheManager_->wasCacheUsedInLastPrompt();
+        deps.cacheManager->isCacheDisabled() ||
+        !deps.cacheManager->wasCacheUsedInLastPrompt();
   } else {
-    auto formatted = formatPrompt(prompt.input);
+    auto formatted = deps.formatPrompt(prompt.input);
     resolved.chatMsgs = std::move(formatted.first);
     resolved.tools = std::move(formatted.second);
     resolved.shouldResetAfterInference = true;
@@ -510,44 +510,63 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
 
 std::string LlamaModel::processPrompt(const Prompt& prompt) {
   std::shared_lock lock(stateMtx_);
+  qvac_lib_inference_addon_llama::runtime::RuntimeDeps runtimeDeps{
+      .context = state_->llmContext_.get(),
+      .cacheManager =
+          state_->cacheManager_.has_value() ? &state_->cacheManager_.value()
+                                            : nullptr,
+      .formatPrompt = [this](const std::string& inputPrompt) {
+        return this->formatPrompt(inputPrompt);
+      }};
   qvac_lib_inference_addon_llama::runtime::RunRequest request{
-      .executeLegacyRun = [this, &prompt]() { return processPromptImpl(prompt); }
-  };
-  return runPipeline_->run(request);
+      .deps = std::move(runtimeDeps),
+      .executeLegacyRun =
+          [this, &prompt](
+              const qvac_lib_inference_addon_llama::runtime::RuntimeDeps&
+                  deps) { return processPromptImpl(prompt, deps); }};
+  return runPipeline_->run(request).output;
 }
 
-std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
+qvac_lib_inference_addon_llama::runtime::RunResult
+LlamaModel::processPromptImpl(
+    const Prompt& prompt,
+    const qvac_lib_inference_addon_llama::runtime::RuntimeDeps& deps) {
+  qvac_lib_inference_addon_llama::runtime::RunResult result;
   state_->lastRunWasPrefill_ = prompt.prefill;
 
+  LlmContext& context = *deps.context;
+
   // Reset per-inference slide counter so it doesn't leak across runs
-  state_->llmContext_->resetNSlides();
+  context.resetNSlides();
 
   for (const auto& media : prompt.media) {
     loadMedia(media);
   }
 
   std::string out;
-  ResolvedPrompt resolved = resolveChatAndTools(prompt);
+  ResolvedPrompt resolved = resolveChatAndTools(prompt, deps);
 
   if (resolved.shouldResetAfterInference &&
-      state_->llmContext_->getNPast() > 0) {
+      context.getNPast() > 0) {
     resetState(true);
   }
 
   if (resolved.chatMsgs.empty() && resolved.tools.empty()) {
     QLOG_IF(Priority::INFO, "No messages to process - returning early\n");
-    return out;
+    result.output = out;
+    result.resetAfterRun = resolved.shouldResetAfterInference;
+    return result;
   }
 
   auto restore =
-      state_->llmContext_->applyGenerationParams(prompt.generationParams);
+      context.applyGenerationParams(prompt.generationParams);
   ScopeGuard paramsGuard([&] { restore(); });
 
   bool evalOk =
       resolved.tools.empty()
-          ? state_->llmContext_->evalMessage(
+          ? context.evalMessage(
                 resolved.chatMsgs, resolved.isCacheLoaded, prompt.prefill)
-          : state_->llmContext_->evalMessageWithTools(
+          : context.evalMessageWithTools(
                 resolved.chatMsgs,
                 resolved.tools,
                 resolved.isCacheLoaded,
@@ -557,16 +576,20 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     QLOG_IF(
         Priority::DEBUG,
         "Inference was interrupted during prompt evaluation\n");
-    return out;
+    result.output = out;
+    result.resetAfterRun = resolved.shouldResetAfterInference;
+    return result;
   }
 
   if (prompt.prefill) {
-    return out;
+    result.output = out;
+    result.resetAfterRun = resolved.shouldResetAfterInference;
+    return result;
   }
 
   std::ostringstream oss;
   bool needsOutputCapture =
-      state_->llmContext_->dynamicToolsState().toolsCompact();
+      context.dynamicToolsState().toolsCompact();
   auto callback = prompt.outputCallback;
   if (!prompt.outputCallback) {
     callback = [&](const std::string& token) { oss << token; };
@@ -577,7 +600,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     };
   }
 
-  if (!state_->llmContext_->generateResponse(callback)) {
+  if (!context.generateResponse(callback)) {
     resetState();
     std::string errorMsg = string_format("%s: context overflow\n", __func__);
     throw qvac_errors::StatusError(
@@ -587,11 +610,11 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   if (!prompt.outputCallback) {
     out = oss.str();
   }
-  auto& dts = state_->llmContext_->dynamicToolsState();
+  auto& dts = context.dynamicToolsState();
   // Capture nPastBeforeTools before postInfer cleanup for stats reporting
   state_->lastNPastBeforeTools_ = dts.nPastBeforeTools();
   state_->lastToolsTrimmed_ = false;
-  const llama_pos firstMsgTokens = state_->llmContext_->getFirstMsgTokens();
+  const llama_pos firstMsgTokens = context.getFirstMsgTokens();
 
   if (dts.hasDegenerateToolBoundary(firstMsgTokens)) {
     QLOG_IF(
@@ -607,7 +630,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   }
 
   if (dts.hasUsableToolBoundary(firstMsgTokens) &&
-      state_->llmContext_->getNPast() > dts.nPastBeforeTools()) {
+      context.getNPast() > dts.nPastBeforeTools()) {
     // Check captured output for tool calls. In streaming mode oss has
     // the text; in non-streaming mode out already has it.
     std::string ossStr = needsOutputCapture ? oss.str() : std::string();
@@ -615,24 +638,25 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     bool hasToolCall = outputToCheck.find("<tool_call>") != std::string::npos;
     if (!hasToolCall) {
       state_->lastToolsTrimmed_ = true;
-      state_->llmContext_->removeLastNTokens(
-          state_->llmContext_->getNPast() - dts.nPastBeforeTools());
+      context.removeLastNTokens(context.getNPast() - dts.nPastBeforeTools());
       dts.reset();
-      if (state_->llmContext_->getFirstMsgTokens() >
-          state_->llmContext_->getNPast()) {
-        state_->llmContext_->setFirstMsgTokens(state_->llmContext_->getNPast());
+      if (context.getFirstMsgTokens() > context.getNPast()) {
+        context.setFirstMsgTokens(context.getNPast());
       }
     }
   }
-  if (prompt.saveCacheToDisk && state_->cacheManager_.has_value() &&
-      state_->cacheManager_->hasActiveCache()) {
-    state_->cacheManager_->saveCache();
+  if (prompt.saveCacheToDisk && deps.cacheManager != nullptr &&
+      deps.cacheManager->hasActiveCache()) {
+    deps.cacheManager->saveCache();
   }
 
   if (resolved.shouldResetAfterInference) {
     resetState(false);
   }
-  return out;
+  result.output = out;
+  result.resetAfterRun = resolved.shouldResetAfterInference;
+  result.generatedTokens = true;
+  return result;
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {

@@ -1,12 +1,14 @@
 #pragma once
 
 #include <functional>
-#include <string>
+
+#include "runtime/RuntimeStateFacade.hpp"
 
 namespace qvac_lib_inference_addon_llama::runtime {
 
 struct RunRequest {
-  std::function<std::string()> executeLegacyRun;
+  RuntimeDeps deps;
+  std::function<RunResult(const RuntimeDeps&)> executeLegacyRun;
 };
 
 } // namespace qvac_lib_inference_addon_llama::runtime

@@ -202,7 +202,10 @@ public:
 
 private:
   // Impl without mutexes
-  std::string processPromptImpl(const Prompt& prompt);
+  qvac_lib_inference_addon_llama::runtime::RunResult
+  processPromptImpl(
+      const Prompt& prompt,
+      const qvac_lib_inference_addon_llama::runtime::RuntimeDeps& deps);
   void cancelImpl() const;
 
   struct ReloadableState {
@@ -241,9 +244,11 @@ private:
     std::vector<common_chat_msg> chatMsgs;
     std::vector<common_chat_tool> tools;
     bool isCacheLoaded = false;
-    bool shouldResetAfterInference = false;
+    bool shouldResetAfterInference = true;
   };
-  ResolvedPrompt resolveChatAndTools(const Prompt& prompt);
+  ResolvedPrompt resolveChatAndTools(
+      const Prompt& prompt,
+      const qvac_lib_inference_addon_llama::runtime::RuntimeDeps& deps);
 
   void commonParamsParse(
       const std::string& modelPath,

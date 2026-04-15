@@ -4,12 +4,15 @@
 
 namespace qvac_lib_inference_addon_llama::runtime {
 
-std::string RunPipeline::run(const RunRequest& request) const {
+RunResult RunPipeline::run(const RunRequest& request) const {
   if (!request.executeLegacyRun) {
     throw std::runtime_error("RunPipeline request is missing legacy executor");
   }
+  if (request.deps.context == nullptr) {
+    throw std::runtime_error("RunPipeline request is missing runtime context");
+  }
 
-  return request.executeLegacyRun();
+  return request.executeLegacyRun(request.deps);
 }
 
 } // namespace qvac_lib_inference_addon_llama::runtime

@@ -20,7 +20,7 @@ Update this section after each completed step/commit.
 | --- | --- | --- | --- | --- | --- |
 | 0 | Baseline Safety Net | done | local baseline (no code changes) | 2026-04-15 | Sharded tests fail when shard models are absent; baseline captured before refactor |
 | 1 | Runtime Scaffolding | done | local working tree | 2026-04-15 | Added runtime RunRequest/RunPipeline scaffold and delegated processPrompt through pipeline with no logic migration |
-| 2 | Runtime State Facade | planned | - | - | - |
+| 2 | Runtime State Facade | done | local working tree | 2026-04-15 | Added RuntimeDeps/RunResult facade and threaded through RunPipeline/LlamaModel without moving runtime logic |
 | 3 | Prompt Policy | planned | - | - | - |
 | 4 | Cache Session Policy | planned | - | - | - |
 | 5 | Generation Params Policy | planned | - | - | - |
@@ -69,6 +69,21 @@ Append new entries at the top (most recent first).
 - Notes/Risks:
 - Next:
 -->
+
+#### Progress Update - Commit 2: Runtime State Facade
+
+- Status: done
+- Scope completed:
+  - Added `addon/src/runtime/RuntimeStateFacade.hpp` with facade types `RuntimeDeps`, `RunResult`, and `PromptFormatter`.
+  - Updated `RunRequest`/`RunPipeline` to accept explicit runtime dependencies and return `RunResult`.
+  - Updated `LlamaModel::processPrompt`/`processPromptImpl` to pass runtime dependencies through the pipeline while keeping legacy inference logic in place.
+- Tests run:
+  - `npm run test:cpp` -> failed on known baseline/environment-dependent tests (same categories as Commit 0/1 baseline), with runtime facade changes compiling and linking successfully.
+- Notes/Risks:
+  - Known failing tests remain concentrated in sharded-model + tools-compact/cache Qwen3 paths and match previously documented baseline risk areas.
+  - No new compile-time regressions observed in runtime scaffold/facade wiring.
+- Next:
+  - Commit 3 - Prompt Policy
 
 #### Progress Update - Commit 1: Runtime Scaffolding
 
