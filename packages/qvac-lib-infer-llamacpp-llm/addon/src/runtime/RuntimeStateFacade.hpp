@@ -12,6 +12,8 @@ class LlmContext;
 
 namespace qvac_lib_inference_addon_llama::runtime {
 
+class CompactionPolicy;
+
 using PromptFormatter = std::function<std::pair<
     std::vector<common_chat_msg>,
     std::vector<common_chat_tool>>(const std::string&)>;
@@ -19,6 +21,7 @@ using PromptFormatter = std::function<std::pair<
 struct RuntimeDeps {
   LlmContext* context = nullptr;
   CacheManager* cacheManager = nullptr;
+  CompactionPolicy* compactionPolicy = nullptr;
   PromptFormatter formatPrompt;
 };
 

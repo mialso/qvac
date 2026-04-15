@@ -37,6 +37,8 @@
 #include "profile/ModelProfile.hpp"
 #include "qvac-lib-inference-addon-cpp/LlamacppUtils.hpp"
 #include "runtime/RunRequest.hpp"
+#include "runtime/policies/compaction/NoopCompactionPolicy.hpp"
+#include "runtime/policies/compaction/Qwen3ToolsCompactPolicy.hpp"
 #include "utils/BackendSelection.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/SharedSnapshot.hpp"
@@ -342,11 +344,18 @@ void LlamaModel::init(bool acquireLock) {
   }
 
   snap->isTextLlm_ = constructionArgs_.projectionPath.empty();
+  if (toolsCompact) {
+    snap->compactionPolicy_ = std::make_shared<
+        qvac_lib_inference_addon_llama::runtime::Qwen3ToolsCompactPolicy>();
+  } else {
+    snap->compactionPolicy_ = std::make_shared<
+        qvac_lib_inference_addon_llama::runtime::NoopCompactionPolicy>();
+  }
   snap->llmContext_ = createContext(
       std::string(constructionArgs_.projectionPath),
       params,
       std::move(llamaInit),
-      toolsCompact);
+      snap->compactionPolicy_);
 
   if (snap->configuredNDiscarded_ > 0 && snap->llmContext_) {
     snap->llmContext_->setNDiscarded(snap->configuredNDiscarded_);
@@ -374,8 +383,8 @@ bool LlamaModel::isLoaded() {
 
 llama_pos LlamaModel::getNPastBeforeTools() const {
   std::shared_lock lock(stateMtx_);
-  if (state_->llmContext_) {
-    return state_->llmContext_->dynamicToolsState().nPastBeforeTools();
+  if (state_->compactionPolicy_) {
+    return state_->compactionPolicy_->nPastBeforeTools();
   }
   return -1;
 }
@@ -494,9 +503,13 @@ std::string LlamaModel::processPrompt(const Prompt& prompt) {
       .cacheManager =
           state_->cacheManager_.has_value() ? &state_->cacheManager_.value()
                                             : nullptr,
+      .compactionPolicy = state_->compactionPolicy_.get(),
       .formatPrompt = [this](const std::string& inputPrompt) {
         return promptPolicy_.resolvePrompt(
-            inputPrompt, *state_->llmContext_, state_->isTextLlm_);
+            inputPrompt,
+            *state_->llmContext_,
+            *state_->compactionPolicy_,
+            state_->isTextLlm_);
       }};
   qvac_lib_inference_addon_llama::runtime::RunRequest request{
       .deps = std::move(runtimeDeps),
@@ -865,14 +878,16 @@ void LlamaModel::resetState(bool resetStats) {
 
 std::unique_ptr<LlmContext> LlamaModel::createContext(
     std::string&& projectionPath, common_params& params,
-    common_init_result&& llamaInit, bool toolsCompact) {
+    common_init_result&& llamaInit,
+    std::shared_ptr<qvac_lib_inference_addon_llama::runtime::CompactionPolicy>
+        compactionPolicy) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
     return std::make_unique<MtmdLlmContext>(
-        params, std::move(llamaInit), toolsCompact);
+        params, std::move(llamaInit), compactionPolicy);
   }
   return std::make_unique<TextLlmContext>(
-      params, std::move(llamaInit), toolsCompact);
+      params, std::move(llamaInit), std::move(compactionPolicy));
 }
 
 bool LlamaModel::loadMedia(const std::vector<uint8_t>& input) {

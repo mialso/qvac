@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <memory>
 
 #include <llama.h>
 
@@ -20,7 +21,8 @@ public:
   // Constructor
   TextLlmContext(
       common_params& commonParams, common_init_result&& llamaInit,
-      bool toolsCompact = false);
+      std::shared_ptr<qvac_lib_inference_addon_llama::runtime::CompactionPolicy>
+          compactionPolicy);
 
   // Destructor
   ~TextLlmContext() override = default;

@@ -71,6 +71,8 @@ endif()
     ${PROJECT_SOURCE_DIR}/addon/src/profile/Qwen3Profile.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/RunPipeline.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/cache/CacheSessionPolicy.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/compaction/NoopCompactionPolicy.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/compaction/Qwen3ToolsCompactPolicy.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/generation/GenerationParamsPolicy.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/postrun/PostRunPolicy.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/prompt/PromptPolicy.cpp
@@ -125,6 +127,8 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/profile/Qwen3Profile.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/RunPipeline.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/cache/CacheSessionPolicy.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/compaction/NoopCompactionPolicy.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/compaction/Qwen3ToolsCompactPolicy.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/generation/GenerationParamsPolicy.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/postrun/PostRunPolicy.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/prompt/PromptPolicy.cpp

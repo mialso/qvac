@@ -4,6 +4,7 @@
 #include <string>
 
 #include "llama.h"
+#include "runtime/policies/compaction/CompactionPolicy.hpp"
 
 class CacheManager;
 class LlmContext;
@@ -12,6 +13,7 @@ namespace qvac_lib_inference_addon_llama::runtime {
 
 struct PostRunRequest {
   LlmContext& context;
+  CompactionPolicy& compactionPolicy;
   CacheManager* cacheManager = nullptr;
   bool saveCacheToDisk = false;
   bool shouldResetAfterInference = false;

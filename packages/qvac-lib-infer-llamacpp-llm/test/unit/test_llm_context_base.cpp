@@ -12,6 +12,8 @@
 #include "context/LlmContext.hpp"
 #include "context/MtmdLlmContext.hpp"
 #include "context/TextLlmContext.hpp"
+#include "runtime/policies/compaction/NoopCompactionPolicy.hpp"
+#include "runtime/policies/compaction/Qwen3ToolsCompactPolicy.hpp"
 #include "test_common.hpp"
 #include "test_prompt_helpers.hpp"
 
@@ -20,44 +22,122 @@ namespace fs = std::filesystem;
 using test_common::getStatValue;
 using test_common::processPromptString;
 
-TEST(DynamicToolsStateTest, AnchorCanReachFirstMessageBoundaryAfterSlide) {
-  DynamicToolsState dts;
-  dts.setToolsCompact(true);
-  dts.setNPastBeforeTools(120);
+TEST(Qwen3ToolsCompactPolicyTest, AnchorCanReachFirstMessageBoundaryAfterSlide) {
+  qvac_lib_inference_addon_llama::runtime::Qwen3ToolsCompactPolicy policy;
+  policy.setConversationOnlyTokens(50);
+  policy.recordToolBoundary(/*nPast=*/200, /*totalTokens=*/130);
 
   constexpr llama_pos firstMsgTokens = 100;
-  dts.adjustAfterSlide(/*discard=*/20, firstMsgTokens);
-  EXPECT_EQ(dts.nPastBeforeTools(), firstMsgTokens);
+  policy.adjustAfterSlide(/*discard=*/20, firstMsgTokens);
+  EXPECT_EQ(policy.nPastBeforeTools(), firstMsgTokens);
 
   // Once the anchor reaches firstMsgTokens, further slide adjustments stop.
-  dts.adjustAfterSlide(/*discard=*/5, firstMsgTokens);
-  EXPECT_EQ(dts.nPastBeforeTools(), firstMsgTokens);
+  policy.adjustAfterSlide(/*discard=*/5, firstMsgTokens);
+  EXPECT_EQ(policy.nPastBeforeTools(), firstMsgTokens);
 }
 
-TEST(DynamicToolsStateTest, DegenerateAnchorIsNotUsableForPostGenerationTrim) {
-  DynamicToolsState dts;
-  dts.setToolsCompact(true);
+TEST(
+    Qwen3ToolsCompactPolicyTest,
+    DegenerateAnchorIsNotUsableForPostGenerationTrim) {
+  qvac_lib_inference_addon_llama::runtime::Qwen3ToolsCompactPolicy policy;
+  policy.setConversationOnlyTokens(50);
+  policy.recordToolBoundary(/*nPast=*/200, /*totalTokens=*/150);
 
   constexpr llama_pos firstMsgTokens = 100;
   constexpr llama_pos nPast = 180;
-  dts.setNPastBeforeTools(firstMsgTokens);
-
-  const bool shouldTrim = dts.hasUsableToolBoundary(firstMsgTokens) &&
-                          nPast > dts.nPastBeforeTools();
+  const bool shouldTrim = policy.hasUsableBoundary(firstMsgTokens, nPast);
   EXPECT_FALSE(shouldTrim);
 }
 
-TEST(DynamicToolsStateTest, PositiveNonDegenerateAnchorIsUsableForPostTrim) {
-  DynamicToolsState dts;
-  dts.setToolsCompact(true);
+TEST(Qwen3ToolsCompactPolicyTest, PositiveNonDegenerateAnchorIsUsableForPostTrim) {
+  qvac_lib_inference_addon_llama::runtime::Qwen3ToolsCompactPolicy policy;
+  policy.setConversationOnlyTokens(50);
+  policy.recordToolBoundary(/*nPast=*/200, /*totalTokens=*/170);
 
   constexpr llama_pos firstMsgTokens = 100;
   constexpr llama_pos nPast = 180;
-  dts.setNPastBeforeTools(80);
-
-  const bool shouldTrim = dts.hasUsableToolBoundary(firstMsgTokens) &&
-                          nPast > dts.nPastBeforeTools();
+  const bool shouldTrim = policy.hasUsableBoundary(firstMsgTokens, nPast);
   EXPECT_TRUE(shouldTrim);
+}
+
+TEST(Qwen3ToolsCompactPolicyTest, BoundaryRecordingHandlesDegenerateAndAbsentCases) {
+  qvac_lib_inference_addon_llama::runtime::Qwen3ToolsCompactPolicy policy;
+  constexpr llama_pos firstMsgTokens = 100;
+
+  policy.recordToolBoundary(/*nPast=*/190, /*totalTokens=*/130);
+  EXPECT_EQ(policy.nPastBeforeTools(), -1);
+  EXPECT_FALSE(policy.hasDegenerateBoundary(firstMsgTokens));
+
+  policy.setConversationOnlyTokens(40);
+  policy.recordToolBoundary(/*nPast=*/210, /*totalTokens=*/150);
+  EXPECT_EQ(policy.nPastBeforeTools(), firstMsgTokens);
+  EXPECT_TRUE(policy.hasDegenerateBoundary(firstMsgTokens));
+  EXPECT_FALSE(policy.hasUsableBoundary(/*firstMsgTokens=*/firstMsgTokens, 180));
+
+  // Anchor is latched after first record in a run.
+  policy.recordToolBoundary(/*nPast=*/260, /*totalTokens=*/200);
+  EXPECT_EQ(policy.nPastBeforeTools(), firstMsgTokens);
+}
+
+TEST(Qwen3ToolsCompactPolicyTest, ClampDiscardAndSlideAdjustmentRespectAnchorSafety) {
+  qvac_lib_inference_addon_llama::runtime::Qwen3ToolsCompactPolicy policy;
+  policy.setConversationOnlyTokens(45);
+  policy.recordToolBoundary(/*nPast=*/220, /*totalTokens=*/150);
+  constexpr llama_pos firstMsgTokens = 100;
+
+  EXPECT_EQ(policy.nPastBeforeTools(), 115);
+  EXPECT_EQ(policy.clampDiscard(/*nDiscarded=*/100, firstMsgTokens), 15);
+  EXPECT_EQ(policy.clampDiscard(/*nDiscarded=*/8, firstMsgTokens), 8);
+
+  policy.adjustAfterSlide(/*discard=*/15, firstMsgTokens);
+  EXPECT_EQ(policy.nPastBeforeTools(), firstMsgTokens);
+
+  // Once anchor hits first message boundary, no further left shift is allowed.
+  policy.adjustAfterSlide(/*discard=*/6, firstMsgTokens);
+  EXPECT_EQ(policy.nPastBeforeTools(), firstMsgTokens);
+}
+
+TEST(
+    Qwen3ToolsCompactPolicyTest,
+    ShouldTrimAfterGenerationOnlyForUsableBoundaryWithoutToolCallTag) {
+  qvac_lib_inference_addon_llama::runtime::Qwen3ToolsCompactPolicy policy;
+  policy.setConversationOnlyTokens(55);
+  policy.recordToolBoundary(/*nPast=*/230, /*totalTokens=*/170);
+
+  constexpr llama_pos firstMsgTokens = 100;
+  constexpr llama_pos nPast = 210;
+  ASSERT_TRUE(policy.hasUsableBoundary(firstMsgTokens, nPast));
+
+  EXPECT_TRUE(policy.shouldTrimAfterGeneration(
+      firstMsgTokens, nPast, "Final user-facing answer."));
+  EXPECT_FALSE(policy.shouldTrimAfterGeneration(
+      firstMsgTokens,
+      nPast,
+      "<tool_call>{\"name\":\"get_weather\"}</tool_call>"));
+  EXPECT_FALSE(policy.shouldTrimAfterGeneration(
+      firstMsgTokens, /*nPast=*/policy.nPastBeforeTools(), "answer"));
+}
+
+TEST(NoopCompactionPolicyTest, KeepsDefaultsAndNeverTrims) {
+  qvac_lib_inference_addon_llama::runtime::NoopCompactionPolicy policy;
+
+  EXPECT_FALSE(policy.toolsCompactEnabled());
+  EXPECT_FALSE(policy.shouldEnforcePromptShape());
+  EXPECT_FALSE(policy.shouldCaptureGeneratedOutput());
+  EXPECT_EQ(policy.clampDiscard(/*nDiscarded=*/12, /*firstMsgTokens=*/4), 12);
+  EXPECT_FALSE(policy.hasDegenerateBoundary(/*firstMsgTokens=*/4));
+  EXPECT_FALSE(policy.hasUsableBoundary(/*firstMsgTokens=*/4, /*nPast=*/10));
+  EXPECT_FALSE(policy.shouldTrimAfterGeneration(
+      /*firstMsgTokens=*/4, /*nPast=*/10, "<tool_call>noop</tool_call>"));
+  EXPECT_EQ(policy.nPastBeforeTools(), -1);
+
+  policy.onRunStart(/*nPast=*/0, /*isCacheLoaded=*/false);
+  policy.setConversationOnlyTokens(999);
+  policy.recordToolBoundary(/*nPast=*/500, /*totalTokens=*/300);
+  policy.adjustAfterSlide(/*discard=*/20, /*firstMsgTokens=*/4);
+  policy.clearConversationOnlyTokens();
+  policy.reset();
+  EXPECT_EQ(policy.nPastBeforeTools(), -1);
 }
 
 class LlmContextBaseTest : public ::testing::Test {

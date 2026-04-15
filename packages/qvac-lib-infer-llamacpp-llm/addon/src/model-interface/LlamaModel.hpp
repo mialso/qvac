@@ -22,6 +22,7 @@
 #include "ModelMetadata.hpp"
 #include "runtime/RunPipeline.hpp"
 #include "runtime/policies/cache/CacheSessionPolicy.hpp"
+#include "runtime/policies/compaction/CompactionPolicy.hpp"
 #include "runtime/policies/generation/GenerationParamsPolicy.hpp"
 #include "runtime/policies/postrun/PostRunPolicy.hpp"
 #include "runtime/policies/prompt/PromptPolicy.hpp"
@@ -231,6 +232,8 @@ private:
     // configuration values parsed from configFilemap
     llama_pos configuredNDiscarded_ = 0;
     std::optional<CacheManager> cacheManager_;
+    std::shared_ptr<qvac_lib_inference_addon_llama::runtime::CompactionPolicy>
+        compactionPolicy_;
 
     bool lastRunWasPrefill_ = false;
     llama_pos lastNPastBeforeTools_ = -1;
@@ -246,7 +249,9 @@ private:
   void resetState(bool resetStats = true);
   std::unique_ptr<LlmContext> createContext(
       std::string&& projectionPath, common_params& params,
-      common_init_result&& llamaInit, bool toolsCompact);
+      common_init_result&& llamaInit,
+      std::shared_ptr<qvac_lib_inference_addon_llama::runtime::CompactionPolicy>
+          compactionPolicy);
 
   bool loadMedia(const std::vector<uint8_t>& input);
 

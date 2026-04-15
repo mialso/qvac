@@ -44,6 +44,8 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/profile/Qwen3Profile.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/runtime/RunPipeline.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/runtime/policies/cache/CacheSessionPolicy.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/runtime/policies/compaction/NoopCompactionPolicy.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/runtime/policies/compaction/Qwen3ToolsCompactPolicy.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/runtime/policies/generation/GenerationParamsPolicy.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/runtime/policies/postrun/PostRunPolicy.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/runtime/policies/prompt/PromptPolicy.cpp

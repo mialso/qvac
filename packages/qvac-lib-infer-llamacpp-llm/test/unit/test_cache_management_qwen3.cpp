@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 #include "model-interface/LlamaModel.hpp"
+#include "runtime/policies/compaction/Qwen3ToolsCompactPolicy.hpp"
 #include "test_common.hpp"
 #include "test_prompt_helpers.hpp"
 
@@ -479,18 +480,18 @@ TEST_F(
 // safeLimit > n_discarded, so the single slide must shift anchor exactly by
 // n_discarded.
 TEST_F(CacheManagementQwen3Test, CacheToolsCompactSlidingUnclampedFullDiscard) {
-  DynamicToolsState dts;
-  dts.setToolsCompact(true);
+  qvac_lib_inference_addon_llama::runtime::Qwen3ToolsCompactPolicy policy;
+  policy.setConversationOnlyTokens(200);
+  policy.recordToolBoundary(/*nPast=*/241, /*totalTokens=*/200);
 
   constexpr llama_pos firstMsgTokens = 11;
   constexpr llama_pos anchorBefore = 241;
   constexpr llama_pos nDiscarded = 32;
 
-  dts.setNPastBeforeTools(anchorBefore);
-  const llama_pos discard = dts.clampDiscard(nDiscarded, firstMsgTokens);
-  dts.adjustAfterSlide(discard, firstMsgTokens);
+  const llama_pos discard = policy.clampDiscard(nDiscarded, firstMsgTokens);
+  policy.adjustAfterSlide(discard, firstMsgTokens);
 
   EXPECT_EQ(discard, nDiscarded);
-  EXPECT_EQ(dts.nPastBeforeTools(), anchorBefore - nDiscarded);
-  EXPECT_GE(dts.nPastBeforeTools(), firstMsgTokens);
+  EXPECT_EQ(policy.nPastBeforeTools(), anchorBefore - nDiscarded);
+  EXPECT_GE(policy.nPastBeforeTools(), firstMsgTokens);
 }

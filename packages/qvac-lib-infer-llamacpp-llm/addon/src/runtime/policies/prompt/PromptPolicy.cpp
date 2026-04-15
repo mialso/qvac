@@ -16,7 +16,8 @@ constexpr const char* kPromptErrorFuncName = "formatPrompt";
 
 std::pair<std::vector<common_chat_msg>, std::vector<common_chat_tool>>
 PromptPolicy::resolvePrompt(
-    const std::string& input, LlmContext& context, bool isTextLlm) const {
+    const std::string& input, LlmContext& context,
+    const CompactionPolicy& compactionPolicy, bool isTextLlm) const {
   if (input.empty()) {
     context.resetMedia();
     std::string errorMsg =
@@ -32,7 +33,7 @@ PromptPolicy::resolvePrompt(
 
   if (err.empty() && chatJson.is<picojson::array>()) {
     auto& obj = chatJson.get<picojson::array>();
-    const bool toolsCompactEnabled = context.dynamicToolsState().toolsCompact();
+    const bool toolsCompactEnabled = compactionPolicy.shouldEnforcePromptShape();
     int64_t lastInputAnchorIndex = -1;
     int64_t firstToolIndex = -1;
     bool hasSplitToolBlock = false;
@@ -125,18 +126,7 @@ PromptPolicy::resolvePrompt(
       }
     }
 
-    if (toolsCompactEnabled) {
-      if (tools.empty()) {
-        std::string errorMsg = string_format(
-            "%s: tools_compact requires non-empty tools attached to the last "
-            "user message\n",
-            kPromptErrorFuncName);
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            errorMsg);
-      }
+    if (toolsCompactEnabled && !tools.empty()) {
       if (lastInputAnchorIndex < 0) {
         std::string errorMsg = string_format(
             "%s: tools_compact requires a user or tool message before tools\n",

@@ -13,35 +13,32 @@ namespace qvac_lib_inference_addon_llama::runtime {
 PostRunResult PostRunPolicy::finalize(const PostRunRequest& request) const {
   PostRunResult result;
 
-  auto& dts = request.context.dynamicToolsState();
-  result.nPastBeforeTools = dts.nPastBeforeTools();
+  auto& compactionPolicy = request.compactionPolicy;
+  result.nPastBeforeTools = compactionPolicy.nPastBeforeTools();
   const llama_pos firstMsgTokens = request.context.getFirstMsgTokens();
 
-  if (dts.hasDegenerateToolBoundary(firstMsgTokens)) {
+  if (compactionPolicy.hasDegenerateBoundary(firstMsgTokens)) {
     QLOG_IF(
         Priority::WARNING,
         string_format(
             "[LlamaModel] tools_compact degenerate boundary at first message "
             "(nPastBeforeTools=%d, firstMsgTokens=%d); skipping "
             "post-generation tools trim\n",
-            dts.nPastBeforeTools(),
+            compactionPolicy.nPastBeforeTools(),
             firstMsgTokens));
-    dts.reset();
+    compactionPolicy.reset();
   }
 
-  if (dts.hasUsableToolBoundary(firstMsgTokens) &&
-      request.context.getNPast() > dts.nPastBeforeTools()) {
-    const std::string& outputToCheck =
-        request.outputCaptured ? request.capturedOutput : request.output;
-    bool hasToolCall = outputToCheck.find("<tool_call>") != std::string::npos;
-    if (!hasToolCall) {
-      result.toolsTrimmed = true;
-      request.context.removeLastNTokens(
-          request.context.getNPast() - dts.nPastBeforeTools());
-      dts.reset();
-      if (request.context.getFirstMsgTokens() > request.context.getNPast()) {
-        request.context.setFirstMsgTokens(request.context.getNPast());
-      }
+  const std::string& outputToCheck =
+      request.outputCaptured ? request.capturedOutput : request.output;
+  if (compactionPolicy.shouldTrimAfterGeneration(
+          firstMsgTokens, request.context.getNPast(), outputToCheck)) {
+    result.toolsTrimmed = true;
+    request.context.removeLastNTokens(
+        request.context.getNPast() - compactionPolicy.nPastBeforeTools());
+    compactionPolicy.reset();
+    if (request.context.getFirstMsgTokens() > request.context.getNPast()) {
+      request.context.setFirstMsgTokens(request.context.getNPast());
     }
   }
 

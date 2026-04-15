@@ -25,6 +25,9 @@ RunResult RunPipeline::run(const RunRequest& request) const {
   if (request.generationParamsPolicy == nullptr) {
     throw std::runtime_error("RunPipeline request is missing generation policy");
   }
+  if (request.deps.compactionPolicy == nullptr) {
+    throw std::runtime_error("RunPipeline request is missing compaction policy");
+  }
   if (request.postRunPolicy == nullptr) {
     throw std::runtime_error("RunPipeline request is missing post-run policy");
   }
@@ -88,7 +91,8 @@ RunResult RunPipeline::run(const RunRequest& request) const {
   }
 
   std::ostringstream oss;
-  bool needsOutputCapture = context.dynamicToolsState().toolsCompact();
+  bool needsOutputCapture =
+      request.deps.compactionPolicy->shouldCaptureGeneratedOutput();
   auto callback = request.outputCallback;
   if (!request.outputCallback) {
     callback = [&](const std::string& token) { oss << token; };
@@ -113,6 +117,7 @@ RunResult RunPipeline::run(const RunRequest& request) const {
   std::string capturedOutput = needsOutputCapture ? oss.str() : std::string();
   auto postRun = request.postRunPolicy->finalize(
       {.context = context,
+       .compactionPolicy = *request.deps.compactionPolicy,
        .cacheManager = request.deps.cacheManager,
        .saveCacheToDisk = request.saveCacheToDisk,
        .shouldResetAfterInference = resolved.shouldResetAfterInference,
