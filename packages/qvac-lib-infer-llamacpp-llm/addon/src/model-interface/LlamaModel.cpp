@@ -31,8 +31,8 @@
 #include <llama/mtmd/mtmd.h>
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
-#include "MtmdLlmContext.hpp"
-#include "TextLlmContext.hpp"
+#include "context/MtmdLlmContext.hpp"
+#include "context/TextLlmContext.hpp"
 #include "addon/LlmErrors.hpp"
 #include "profile/ModelProfile.hpp"
 #include "qvac-lib-inference-addon-cpp/LlamacppUtils.hpp"

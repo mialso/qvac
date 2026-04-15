@@ -239,8 +239,8 @@ graph TB
         LLAMAMODEL["LlamaModel<br/>(model-interface/LlamaModel.cpp)"]
         METADATA["ModelMetaData<br/>(model-interface/ModelMetadata.cpp)"]
         ASYNCWL["AsyncWeightsLoader<br/>(model-interface/AsyncWeightsLoader.cpp)"]
-        TEXTCTX["TextLlmContext<br/>(model-interface/TextLlmContext.cpp)"]
-        MTMDCTX["MtmdLlmContext<br/>(model-interface/MtmdLlmContext.cpp)"]
+        TEXTCTX["TextLlmContext<br/>(context/TextLlmContext.cpp)"]
+        MTMDCTX["MtmdLlmContext<br/>(context/MtmdLlmContext.cpp)"]
     end
     
     subgraph "Layer 5: Backend"

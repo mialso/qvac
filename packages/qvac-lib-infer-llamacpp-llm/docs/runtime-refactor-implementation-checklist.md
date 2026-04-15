@@ -27,7 +27,7 @@ Update this section after each completed step/commit.
 | 6 | Post-Run Policy | done | local working tree | 2026-04-15 | Added runtime post-run policy and delegated trim/save/reset finalization from LlamaModel |
 | 7 | Model Profiles | done | local working tree | 2026-04-15 | Added profile layer and routed Qwen3/template capability checks through profile hooks |
 | 8 | Pipeline as Primary Orchestrator | done | local working tree | 2026-04-15 | RunPipeline now owns run-stage orchestration; LlamaModel reduced to request assembly/lifecycle adapter |
-| 9 | Context Folder Normalization (optional) | planned | - | - | - |
+| 9 | Context Folder Normalization (optional) | done | local working tree | 2026-04-15 | Added normalized `context/*` entrypoints and switched includes/CMake test targets to context paths without runtime logic changes |
 | 10 | Cleanup + Dead Code Removal | planned | - | - | - |
 
 Status values:
@@ -69,6 +69,24 @@ Append new entries at the top (most recent first).
 - Notes/Risks:
 - Next:
 -->
+
+#### Progress Update - Commit 9: Context Folder Normalization (optional)
+
+- Status: done
+- Scope completed:
+  - Added normalized context path entrypoints under `addon/src/context/` (`LlmContext`, `TextLlmContext`, `MtmdLlmContext`) and switched runtime/model/test includes to `context/*`.
+  - Updated addon/CLI/test CMake source lists to build context implementation units from `addon/src/context/*` instead of `addon/src/model-interface/*`.
+  - Updated `docs/architecture.md` model-layer path references to the normalized context implementation location.
+- Tests run:
+  - `bare-make build --target addon-test` -> passed
+  - `./build/test/unit/addon-test --gtest_filter=LlmContextBaseTest.*` -> all 10 tests passed; process exits non-zero due existing Vulkan LeakSanitizer leak report in this environment
+  - `./build/test/unit/addon-test --gtest_filter=TextLlmContextTest.*` -> all 18 tests passed; process exits non-zero due existing Vulkan LeakSanitizer leak report in this environment
+  - `./build/test/unit/addon-test --gtest_filter=MtmdLlmContextTest.*` -> all 14 tests passed; process exits non-zero due existing Vulkan LeakSanitizer leak report in this environment
+- Notes/Risks:
+  - Behavior is intended to remain unchanged; this step is include/path normalization only.
+  - Vulkan backend LeakSanitizer report remains baseline environment noise for local unit runs.
+- Next:
+  - Commit 10 - Cleanup + Dead Code Removal
 
 #### Progress Update - Commit 8: Pipeline as Primary Orchestrator
 

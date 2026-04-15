@@ -18,7 +18,7 @@
 #include "LlamaFinetuningHelpers.hpp"
 #include "LlamaFinetuningParams.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
-#include "LlmContext.hpp"
+#include "context/LlmContext.hpp"
 #include "ModelMetadata.hpp"
 #include "runtime/RunPipeline.hpp"
 #include "runtime/policies/cache/CacheSessionPolicy.hpp"

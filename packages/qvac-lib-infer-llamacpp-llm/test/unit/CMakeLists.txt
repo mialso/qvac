@@ -50,8 +50,8 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/context/MtmdLlmContext.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/context/TextLlmContext.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp

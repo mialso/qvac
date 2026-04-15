@@ -7,7 +7,7 @@
 
 #include <llama.h>
 
-#include "LlmContext.hpp"
+#include "context/LlmContext.hpp"
 #include "common/chat.h"
 
 class CacheManager {

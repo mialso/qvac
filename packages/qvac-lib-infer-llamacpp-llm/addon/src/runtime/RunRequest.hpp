@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "model-interface/LlmContext.hpp"
+#include "context/LlmContext.hpp"
 #include "runtime/RuntimeStateFacade.hpp"
 #include "runtime/policies/cache/CacheSessionPolicy.hpp"
 #include "runtime/policies/generation/GenerationParamsPolicy.hpp"

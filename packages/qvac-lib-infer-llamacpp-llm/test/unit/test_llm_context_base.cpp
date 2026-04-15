@@ -9,9 +9,9 @@
 
 #include "common/chat.h"
 #include "model-interface/LlamaModel.hpp"
-#include "model-interface/LlmContext.hpp"
-#include "model-interface/MtmdLlmContext.hpp"
-#include "model-interface/TextLlmContext.hpp"
+#include "context/LlmContext.hpp"
+#include "context/MtmdLlmContext.hpp"
+#include "context/TextLlmContext.hpp"
 #include "test_common.hpp"
 #include "test_prompt_helpers.hpp"
 

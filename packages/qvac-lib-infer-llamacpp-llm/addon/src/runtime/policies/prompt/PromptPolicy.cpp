@@ -5,7 +5,7 @@
 #include <llama/mtmd/mtmd.h>
 
 #include "addon/LlmErrors.hpp"
-#include "model-interface/LlmContext.hpp"
+#include "context/LlmContext.hpp"
 
 using namespace qvac_lib_inference_addon_llama::errors;
 

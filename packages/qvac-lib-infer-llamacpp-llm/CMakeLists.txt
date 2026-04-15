@@ -75,8 +75,8 @@ endif()
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/postrun/PostRunPolicy.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/prompt/PromptPolicy.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/context/MtmdLlmContext.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/context/TextLlmContext.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
@@ -128,8 +128,8 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/generation/GenerationParamsPolicy.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/postrun/PostRunPolicy.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/runtime/policies/prompt/PromptPolicy.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/context/MtmdLlmContext.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/context/TextLlmContext.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp

@@ -2,7 +2,7 @@
 
 #include "common/common.h"
 #include "model-interface/CacheManager.hpp"
-#include "model-interface/LlmContext.hpp"
+#include "context/LlmContext.hpp"
 #include "utils/LoggingMacros.hpp"
 
 using namespace qvac_lib_inference_addon_cpp::logger;

@@ -2,7 +2,7 @@
 
 #include <functional>
 
-#include "model-interface/LlmContext.hpp"
+#include "context/LlmContext.hpp"
 
 namespace qvac_lib_inference_addon_llama::runtime {
 
