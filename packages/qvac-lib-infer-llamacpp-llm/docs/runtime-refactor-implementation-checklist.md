@@ -21,7 +21,7 @@ Update this section after each completed step/commit.
 | 0 | Baseline Safety Net | done | local baseline (no code changes) | 2026-04-15 | Sharded tests fail when shard models are absent; baseline captured before refactor |
 | 1 | Runtime Scaffolding | done | local working tree | 2026-04-15 | Added runtime RunRequest/RunPipeline scaffold and delegated processPrompt through pipeline with no logic migration |
 | 2 | Runtime State Facade | done | local working tree | 2026-04-15 | Added RuntimeDeps/RunResult facade and threaded through RunPipeline/LlamaModel without moving runtime logic |
-| 3 | Prompt Policy | planned | - | - | - |
+| 3 | Prompt Policy | done | local working tree | 2026-04-15 | Added runtime PromptPolicy and delegated LlamaModel prompt parsing/validation to it while preserving legacy prompt errors/constraints |
 | 4 | Cache Session Policy | planned | - | - | - |
 | 5 | Generation Params Policy | planned | - | - | - |
 | 6 | Post-Run Policy | planned | - | - | - |
@@ -69,6 +69,22 @@ Append new entries at the top (most recent first).
 - Notes/Risks:
 - Next:
 -->
+
+#### Progress Update - Commit 3: Prompt Policy
+
+- Status: done
+- Scope completed:
+  - Added `addon/src/runtime/policies/prompt/PromptPolicy.hpp` and `addon/src/runtime/policies/prompt/PromptPolicy.cpp` and moved prompt parse/validation logic out of `LlamaModel::formatPrompt` into the policy.
+  - Updated `LlamaModel::formatPrompt` to delegate to `PromptPolicy::resolvePrompt(...)` while preserving existing tools/tools_compact/media validation semantics and error text.
+  - Wired build/test targets to compile the new policy source in `CMakeLists.txt` and `test/unit/CMakeLists.txt`.
+- Tests run:
+  - `bare-make generate -D BUILD_TESTING=ON` -> passed
+  - `bare-make build --target addon-test` -> passed
+  - `./build/test/unit/addon-test --gtest_filter=LlamaModelTest.FormatPromptMediaInTextOnlyModel:LlamaModelTest.FormatPromptMediaWithoutUserMessage:LlamaModelTest.FormatPromptMediaWithoutRequest:LlamaModelTest.InvalidJSONInput:LlamaModelTest.MalformedChatMessageFormat:ModelToolsQwen3Test.ToolsCompactRejectsPromptWithoutTools:ModelToolsQwen3Test.ToolsCompactRejectsToolsWithoutUserOrToolMessage:ModelToolsQwen3Test.ToolsCompactRejectsSplitOrDetachedToolBlocks:ModelToolsQwen3Test.ToolsCompactAllowsToolsAfterToolMessage` -> passed (9 tests)
+- Notes/Risks:
+  - Prompt parsing now depends on the new policy boundary; follow-up commits should continue migrating runtime orchestration through policy types.
+- Next:
+  - Commit 4 - Cache Session Policy
 
 #### Progress Update - Commit 2: Runtime State Facade
 

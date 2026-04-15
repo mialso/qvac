@@ -13,8 +13,6 @@
 #include <vector>
 
 #include <llama.h>
-#include <picojson/picojson.h>
-
 #include "AsyncWeightsLoader.hpp"
 #include "CacheManager.hpp"
 #include "LlamaFinetuningHelpers.hpp"
@@ -23,6 +21,7 @@
 #include "LlmContext.hpp"
 #include "ModelMetadata.hpp"
 #include "runtime/RunPipeline.hpp"
+#include "runtime/policies/prompt/PromptPolicy.hpp"
 #include "common/chat.h"
 #include "qvac-lib-inference-addon-cpp/BlobsStream.hpp"
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
@@ -288,6 +287,7 @@ private:
   std::shared_ptr<ReloadableState> state_;
   std::unique_ptr<qvac_lib_inference_addon_llama::runtime::RunPipeline>
       runPipeline_;
+  qvac_lib_inference_addon_llama::runtime::PromptPolicy promptPolicy_;
   int64_t runtimeBackendDevice_ = 0;
 
   bool isBitnetModel() const;
