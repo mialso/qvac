@@ -203,11 +203,6 @@ public:
   void waitUntilFinetuningPauseComplete();
 
 private:
-  // Impl without mutexes
-  qvac_lib_inference_addon_llama::runtime::RunResult
-  processPromptImpl(
-      const Prompt& prompt,
-      const qvac_lib_inference_addon_llama::runtime::RuntimeDeps& deps);
   void cancelImpl() const;
 
   struct ReloadableState {

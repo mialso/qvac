@@ -26,7 +26,7 @@ Update this section after each completed step/commit.
 | 5 | Generation Params Policy | done | local working tree | 2026-04-15 | Added runtime generation params policy and delegated override apply/restore lifecycle from LlamaModel |
 | 6 | Post-Run Policy | done | local working tree | 2026-04-15 | Added runtime post-run policy and delegated trim/save/reset finalization from LlamaModel |
 | 7 | Model Profiles | done | local working tree | 2026-04-15 | Added profile layer and routed Qwen3/template capability checks through profile hooks |
-| 8 | Pipeline as Primary Orchestrator | planned | - | - | - |
+| 8 | Pipeline as Primary Orchestrator | done | local working tree | 2026-04-15 | RunPipeline now owns run-stage orchestration; LlamaModel reduced to request assembly/lifecycle adapter |
 | 9 | Context Folder Normalization (optional) | planned | - | - | - |
 | 10 | Cleanup + Dead Code Removal | planned | - | - | - |
 
@@ -69,6 +69,24 @@ Append new entries at the top (most recent first).
 - Notes/Risks:
 - Next:
 -->
+
+#### Progress Update - Commit 8: Pipeline as Primary Orchestrator
+
+- Status: done
+- Scope completed:
+  - Reworked `addon/src/runtime/RunRequest.hpp` to carry explicit runtime stage inputs (prompt/run options/media/output callbacks), policy references, and lifecycle hooks (`loadMedia`, `resetState`, debug boundary updates).
+  - Replaced `RunPipeline::run(...)` legacy executor delegation with direct stage orchestration in `addon/src/runtime/RunPipeline.cpp`: cache session resolve, generation override guard, eval/prefill branch, generate branch, post-run finalize, and overflow/reset handling.
+  - Simplified `LlamaModel::processPrompt(...)` into a pipeline adapter that builds `RunRequest`, wires policies/callbacks, and removed `processPromptImpl(...)` from `LlamaModel`.
+- Tests run:
+  - `bare-make build --target addon-test` -> passed
+  - `./build/test/unit/addon-test --gtest_filter=CacheManagementTest.*` -> all 21 tests passed; process exits non-zero due existing Vulkan LeakSanitizer leak report in this environment
+  - `./build/test/unit/addon-test --gtest_filter=LlmContextBaseTest.*` -> all 10 tests passed; process exits non-zero due existing Vulkan LeakSanitizer leak report in this environment
+  - `./build/test/unit/addon-test --gtest_filter=TextLlmContextTest.*` -> all 18 tests passed; process exits non-zero due existing Vulkan LeakSanitizer leak report in this environment
+- Notes/Risks:
+  - Behavior is intended to remain equivalent; cache/prompt behavior still routes through existing `CacheSessionPolicy` + formatter callback path while orchestration ownership moved to `RunPipeline`.
+  - Vulkan backend LeakSanitizer report remains baseline environment noise for local unit runs.
+- Next:
+  - Commit 9 - Context Folder Normalization (optional)
 
 #### Progress Update - Commit 7: Model Profiles
 
