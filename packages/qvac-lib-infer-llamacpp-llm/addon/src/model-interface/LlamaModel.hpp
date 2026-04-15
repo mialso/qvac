@@ -13,15 +13,19 @@
 #include <vector>
 
 #include <llama.h>
-#include <picojson/picojson.h>
-
 #include "AsyncWeightsLoader.hpp"
 #include "CacheManager.hpp"
 #include "LlamaFinetuningHelpers.hpp"
 #include "LlamaFinetuningParams.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
-#include "LlmContext.hpp"
+#include "context/LlmContext.hpp"
 #include "ModelMetadata.hpp"
+#include "runtime/RunPipeline.hpp"
+#include "runtime/policies/cache/CacheSessionPolicy.hpp"
+#include "runtime/policies/compaction/CompactionPolicy.hpp"
+#include "runtime/policies/generation/GenerationParamsPolicy.hpp"
+#include "runtime/policies/postrun/PostRunPolicy.hpp"
+#include "runtime/policies/prompt/PromptPolicy.hpp"
 #include "common/chat.h"
 #include "qvac-lib-inference-addon-cpp/BlobsStream.hpp"
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
@@ -200,8 +204,6 @@ public:
   void waitUntilFinetuningPauseComplete();
 
 private:
-  // Impl without mutexes
-  std::string processPromptImpl(const Prompt& prompt);
   void cancelImpl() const;
 
   struct ReloadableState {
@@ -230,19 +232,13 @@ private:
     // configuration values parsed from configFilemap
     llama_pos configuredNDiscarded_ = 0;
     std::optional<CacheManager> cacheManager_;
+    std::shared_ptr<qvac_lib_inference_addon_llama::runtime::CompactionPolicy>
+        compactionPolicy_;
 
     bool lastRunWasPrefill_ = false;
     llama_pos lastNPastBeforeTools_ = -1;
     bool lastToolsTrimmed_ = false;
   };
-
-  struct ResolvedPrompt {
-    std::vector<common_chat_msg> chatMsgs;
-    std::vector<common_chat_tool> tools;
-    bool isCacheLoaded = false;
-    bool shouldResetAfterInference = false;
-  };
-  ResolvedPrompt resolveChatAndTools(const Prompt& prompt);
 
   void commonParamsParse(
       const std::string& modelPath,
@@ -250,18 +246,12 @@ private:
       common_params& params, std::optional<int>& outAdrenoVersion,
       bool& outToolsCompact);
 
-  /**
-   * The Format prompt method. It formats the prompt json to chat messages.
-   *
-   * @param input - input prompt.
-   * @return formatted chat messages and tools.
-   */
-  std::pair<std::vector<common_chat_msg>, std::vector<common_chat_tool>>
-  formatPrompt(const std::string& input);
   void resetState(bool resetStats = true);
   std::unique_ptr<LlmContext> createContext(
       std::string&& projectionPath, common_params& params,
-      common_init_result&& llamaInit, bool toolsCompact);
+      common_init_result&& llamaInit,
+      std::shared_ptr<qvac_lib_inference_addon_llama::runtime::CompactionPolicy>
+          compactionPolicy);
 
   bool loadMedia(const std::vector<uint8_t>& input);
 
@@ -280,6 +270,14 @@ private:
   /// only in reload()
   mutable std::shared_mutex stateMtx_;
   std::shared_ptr<ReloadableState> state_;
+  std::unique_ptr<qvac_lib_inference_addon_llama::runtime::RunPipeline>
+      runPipeline_;
+  qvac_lib_inference_addon_llama::runtime::CacheSessionPolicy
+      cacheSessionPolicy_;
+  qvac_lib_inference_addon_llama::runtime::GenerationParamsPolicy
+      generationParamsPolicy_;
+  qvac_lib_inference_addon_llama::runtime::PostRunPolicy postRunPolicy_;
+  qvac_lib_inference_addon_llama::runtime::PromptPolicy promptPolicy_;
   int64_t runtimeBackendDevice_ = 0;
 
   bool isBitnetModel() const;

@@ -9,7 +9,7 @@
 
 #include "common/chat.h"
 #include "model-interface/LlamaModel.hpp"
-#include "model-interface/MtmdLlmContext.hpp"
+#include "context/MtmdLlmContext.hpp"
 #include "test_common.hpp"
 
 using test_common::getStatValue;

@@ -11,7 +11,7 @@
 
 #include "common/chat.h"
 #include "model-interface/LlamaModel.hpp"
-#include "model-interface/TextLlmContext.hpp"
+#include "context/TextLlmContext.hpp"
 #include "test_common.hpp"
 
 using test_common::getStatValue;

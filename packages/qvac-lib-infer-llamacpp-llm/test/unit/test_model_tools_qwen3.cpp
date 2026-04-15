@@ -144,7 +144,7 @@ TEST_F(ModelToolsQwen3Test, CacheEnabledWithToolMessage) {
   }
 }
 
-TEST_F(ModelToolsQwen3Test, ToolsCompactRejectsPromptWithoutTools) {
+TEST_F(ModelToolsQwen3Test, ToolsCompactAllowsPromptWithoutTools) {
   if (!isQwen3ModelPath(test_model_path)) {
     GTEST_SKIP() << "Test requires Qwen3 model for tools_compact feature";
   }
@@ -156,8 +156,7 @@ TEST_F(ModelToolsQwen3Test, ToolsCompactRejectsPromptWithoutTools) {
 
   const std::string input =
       R"([{"role": "user", "content": "Hello without tools"}])";
-  EXPECT_THROW(
-      { (void)processPrompt(model, input); }, qvac_errors::StatusError);
+  EXPECT_NO_THROW({ (void)processPrompt(model, input); });
 }
 
 TEST_F(ModelToolsQwen3Test, ToolsCompactRejectsToolsWithoutUserOrToolMessage) {

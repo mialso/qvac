@@ -29,16 +29,18 @@
 #include <ggml-opt.h>
 #include <llama.h>
 #include <llama/mtmd/mtmd.h>
-#include <picojson/picojson.h>
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
-#include "MtmdLlmContext.hpp"
-#include "TextLlmContext.hpp"
+#include "context/MtmdLlmContext.hpp"
+#include "context/TextLlmContext.hpp"
 #include "addon/LlmErrors.hpp"
+#include "profile/ModelProfile.hpp"
 #include "qvac-lib-inference-addon-cpp/LlamacppUtils.hpp"
+#include "runtime/RunRequest.hpp"
+#include "runtime/policies/compaction/NoopCompactionPolicy.hpp"
+#include "runtime/policies/compaction/Qwen3ToolsCompactPolicy.hpp"
 #include "utils/BackendSelection.hpp"
 #include "utils/LoggingMacros.hpp"
-#include "utils/ScopeGuard.hpp"
 #include "utils/SharedSnapshot.hpp"
 
 using namespace qvac_lib_inference_addon_llama::errors;
@@ -208,7 +210,10 @@ LlamaModel::LlamaModel(
       constructionArgs_{
           std::move(modelPath),
           std::move(projectionPath),
-          std::move(configFilemap)} {
+          std::move(configFilemap)},
+      runPipeline_(
+          std::make_unique<
+              qvac_lib_inference_addon_llama::runtime::RunPipeline>()) {
   setInitLoader(InitLoader::LOADER_TYPE::DELAYED);
 }
 
@@ -339,11 +344,18 @@ void LlamaModel::init(bool acquireLock) {
   }
 
   snap->isTextLlm_ = constructionArgs_.projectionPath.empty();
+  if (toolsCompact) {
+    snap->compactionPolicy_ = std::make_shared<
+        qvac_lib_inference_addon_llama::runtime::Qwen3ToolsCompactPolicy>();
+  } else {
+    snap->compactionPolicy_ = std::make_shared<
+        qvac_lib_inference_addon_llama::runtime::NoopCompactionPolicy>();
+  }
   snap->llmContext_ = createContext(
       std::string(constructionArgs_.projectionPath),
       params,
       std::move(llamaInit),
-      toolsCompact);
+      snap->compactionPolicy_);
 
   if (snap->configuredNDiscarded_ > 0 && snap->llmContext_) {
     snap->llmContext_->setNDiscarded(snap->configuredNDiscarded_);
@@ -371,8 +383,8 @@ bool LlamaModel::isLoaded() {
 
 llama_pos LlamaModel::getNPastBeforeTools() const {
   std::shared_lock lock(stateMtx_);
-  if (state_->llmContext_) {
-    return state_->llmContext_->dynamicToolsState().nPastBeforeTools();
+  if (state_->compactionPolicy_) {
+    return state_->compactionPolicy_->nPastBeforeTools();
   }
   return -1;
 }
@@ -480,152 +492,46 @@ std::any LlamaModel::process(const std::any& input) {
   return processPrompt(prompt);
 }
 
-LlamaModel::ResolvedPrompt
-LlamaModel::resolveChatAndTools(const Prompt& prompt) {
-  ResolvedPrompt resolved;
-  if (state_->cacheManager_.has_value()) {
-    resolved.isCacheLoaded = state_->cacheManager_->handleCache(
-        resolved.chatMsgs,
-        resolved.tools,
-        prompt.input,
-        [this](const std::string& inputPrompt) {
-          return this->formatPrompt(inputPrompt);
-        },
-        prompt.cacheKey);
-    resolved.shouldResetAfterInference =
-        state_->cacheManager_->isCacheDisabled() ||
-        !state_->cacheManager_->wasCacheUsedInLastPrompt();
-  } else {
-    auto formatted = formatPrompt(prompt.input);
-    resolved.chatMsgs = std::move(formatted.first);
-    resolved.tools = std::move(formatted.second);
-    resolved.shouldResetAfterInference = true;
-  }
-  return resolved;
-}
-
 std::string LlamaModel::processPrompt(const Prompt& prompt) {
   std::shared_lock lock(stateMtx_);
-  return processPromptImpl(prompt);
-}
-
-std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   state_->lastRunWasPrefill_ = prompt.prefill;
 
-  // Reset per-inference slide counter so it doesn't leak across runs
-  state_->llmContext_->resetNSlides();
-
-  for (const auto& media : prompt.media) {
-    loadMedia(media);
-  }
-
-  std::string out;
-  ResolvedPrompt resolved = resolveChatAndTools(prompt);
-
-  if (resolved.shouldResetAfterInference &&
-      state_->llmContext_->getNPast() > 0) {
-    resetState(true);
-  }
-
-  if (resolved.chatMsgs.empty() && resolved.tools.empty()) {
-    QLOG_IF(Priority::INFO, "No messages to process - returning early\n");
-    return out;
-  }
-
-  auto restore =
-      state_->llmContext_->applyGenerationParams(prompt.generationParams);
-  ScopeGuard paramsGuard([&] { restore(); });
-
-  bool evalOk =
-      resolved.tools.empty()
-          ? state_->llmContext_->evalMessage(
-                resolved.chatMsgs, resolved.isCacheLoaded, prompt.prefill)
-          : state_->llmContext_->evalMessageWithTools(
-                resolved.chatMsgs,
-                resolved.tools,
-                resolved.isCacheLoaded,
-                prompt.prefill);
-
-  if (!evalOk) {
-    QLOG_IF(
-        Priority::DEBUG,
-        "Inference was interrupted during prompt evaluation\n");
-    return out;
-  }
-
-  if (prompt.prefill) {
-    return out;
-  }
-
-  std::ostringstream oss;
-  bool needsOutputCapture =
-      state_->llmContext_->dynamicToolsState().toolsCompact();
-  auto callback = prompt.outputCallback;
-  if (!prompt.outputCallback) {
-    callback = [&](const std::string& token) { oss << token; };
-  } else if (needsOutputCapture) {
-    callback = [&](const std::string& token) {
-      oss << token;
-      prompt.outputCallback(token);
-    };
-  }
-
-  if (!state_->llmContext_->generateResponse(callback)) {
-    resetState();
-    std::string errorMsg = string_format("%s: context overflow\n", __func__);
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(ContextOverflow), errorMsg);
-  }
-
-  if (!prompt.outputCallback) {
-    out = oss.str();
-  }
-  auto& dts = state_->llmContext_->dynamicToolsState();
-  // Capture nPastBeforeTools before postInfer cleanup for stats reporting
-  state_->lastNPastBeforeTools_ = dts.nPastBeforeTools();
-  state_->lastToolsTrimmed_ = false;
-  const llama_pos firstMsgTokens = state_->llmContext_->getFirstMsgTokens();
-
-  if (dts.hasDegenerateToolBoundary(firstMsgTokens)) {
-    QLOG_IF(
-        Priority::WARNING,
-        string_format(
-            "[LlamaModel] tools_compact degenerate boundary at first message "
-            "(nPastBeforeTools=%d, firstMsgTokens=%d); skipping "
-            "post-generation "
-            "tools trim\n",
-            dts.nPastBeforeTools(),
-            firstMsgTokens));
-    dts.reset();
-  }
-
-  if (dts.hasUsableToolBoundary(firstMsgTokens) &&
-      state_->llmContext_->getNPast() > dts.nPastBeforeTools()) {
-    // Check captured output for tool calls. In streaming mode oss has
-    // the text; in non-streaming mode out already has it.
-    std::string ossStr = needsOutputCapture ? oss.str() : std::string();
-    const std::string& outputToCheck = needsOutputCapture ? ossStr : out;
-    bool hasToolCall = outputToCheck.find("<tool_call>") != std::string::npos;
-    if (!hasToolCall) {
-      state_->lastToolsTrimmed_ = true;
-      state_->llmContext_->removeLastNTokens(
-          state_->llmContext_->getNPast() - dts.nPastBeforeTools());
-      dts.reset();
-      if (state_->llmContext_->getFirstMsgTokens() >
-          state_->llmContext_->getNPast()) {
-        state_->llmContext_->setFirstMsgTokens(state_->llmContext_->getNPast());
-      }
-    }
-  }
-  if (prompt.saveCacheToDisk && state_->cacheManager_.has_value() &&
-      state_->cacheManager_->hasActiveCache()) {
-    state_->cacheManager_->saveCache();
-  }
-
-  if (resolved.shouldResetAfterInference) {
-    resetState(false);
-  }
-  return out;
+  // Runtime boundary: LlamaModel wires dependencies and delegates run stages
+  // to RunPipeline/policies to keep orchestration centralized.
+  qvac_lib_inference_addon_llama::runtime::RuntimeDeps runtimeDeps{
+      .context = state_->llmContext_.get(),
+      .cacheManager =
+          state_->cacheManager_.has_value() ? &state_->cacheManager_.value()
+                                            : nullptr,
+      .compactionPolicy = state_->compactionPolicy_.get(),
+      .formatPrompt = [this](const std::string& inputPrompt) {
+        return promptPolicy_.resolvePrompt(
+            inputPrompt,
+            *state_->llmContext_,
+            *state_->compactionPolicy_,
+            state_->isTextLlm_);
+      }};
+  qvac_lib_inference_addon_llama::runtime::RunRequest request{
+      .deps = std::move(runtimeDeps),
+      .cacheSessionPolicy = &cacheSessionPolicy_,
+      .generationParamsPolicy = &generationParamsPolicy_,
+      .postRunPolicy = &postRunPolicy_,
+      .input = prompt.input,
+      .cacheKey = prompt.cacheKey,
+      .prefill = prompt.prefill,
+      .saveCacheToDisk = prompt.saveCacheToDisk,
+      .generationParams = prompt.generationParams,
+      .media = prompt.media,
+      .outputCallback = prompt.outputCallback,
+      .loadMedia = [this](const std::vector<uint8_t>& media) {
+        this->loadMedia(media);
+      },
+      .resetState = [this](bool resetStats) { this->resetState(resetStats); },
+      .setDebugBoundaryStats = [this](llama_pos nPastBeforeTools, bool trimmed) {
+        state_->lastNPastBeforeTools_ = nPastBeforeTools;
+        state_->lastToolsTrimmed_ = trimmed;
+      }};
+  return runPipeline_->run(request).output;
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
@@ -727,8 +633,10 @@ void LlamaModel::commonParamsParse(
   }
 
   if (outToolsCompact) {
-    auto arch = metadata_.tryGetString("general.architecture");
-    if (!arch.has_value() || arch.value() != "qwen3") {
+    auto modelProfile =
+        qvac_lib_inference_addon_llama::profile::createProfileFromMetadata(
+            metadata_);
+    if (!modelProfile->capabilities().supportsToolsCompact) {
       QLOG_IF(
           Priority::WARNING,
           "[LlamaModel] tools_compact is only supported for Qwen3 models, "
@@ -962,165 +870,6 @@ void LlamaModel::commonParamsParse(
             params.rope_freq_scale));
   }
 }
-// NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
-std::pair<std::vector<common_chat_msg>, std::vector<common_chat_tool>>
-LlamaModel::formatPrompt(const std::string& input) {
-  if (input.empty()) {
-    state_->llmContext_->resetMedia();
-    std::string errorMsg = string_format("%s: empty prompt\n", __func__);
-    throw qvac_errors::StatusError(ADDON_ID, toString(EmptyPrompt), errorMsg);
-  }
-  std::vector<common_chat_msg> chatMsgs;
-  std::vector<common_chat_tool> tools;
-
-  picojson::value chatJson;
-  std::string err = picojson::parse(chatJson, input);
-
-  if (err.empty() && chatJson.is<picojson::array>()) {
-    auto& obj = chatJson.get<picojson::array>();
-    const bool toolsCompactEnabled =
-        state_->llmContext_->dynamicToolsState().toolsCompact();
-    int64_t lastInputAnchorIndex = -1;
-    int64_t firstToolIndex = -1;
-    bool hasSplitToolBlock = false;
-    bool hasNonToolAfterFirstTool = false;
-
-    int addMediaPlaceholder = 0;
-    bool isNextUser = false;
-    for (size_t i = 0; i < obj.size(); ++i) {
-      const auto& subObj = obj[i];
-      if (subObj.is<picojson::object>()) {
-        picojson::object jsonObj = subObj.get<picojson::object>();
-
-        if (jsonObj.find("type") != jsonObj.end() &&
-            jsonObj["type"].get<std::string>() == "function") {
-          if (firstToolIndex < 0) {
-            firstToolIndex = static_cast<int64_t>(i);
-          }
-          if (hasNonToolAfterFirstTool) {
-            hasSplitToolBlock = true;
-          }
-          common_chat_tool tool;
-          tool.name = jsonObj["name"].get<std::string>();
-          if (jsonObj.find("description") != jsonObj.end()) {
-            tool.description = jsonObj["description"].get<std::string>();
-          }
-          if (jsonObj.find("parameters") != jsonObj.end()) {
-            tool.parameters = jsonObj["parameters"].serialize();
-          }
-          tools.push_back(tool);
-          continue;
-        }
-
-        common_chat_msg newMsg;
-        if (jsonObj.find("role") == jsonObj.end()) {
-          const char* errorMsg = "role is required in the input\n";
-          throw qvac_errors::StatusError(
-              ADDON_ID, toString(NoRoleProvided), errorMsg);
-        }
-        newMsg.role = jsonObj["role"].get<std::string>();
-        if (newMsg.role == "user" || newMsg.role == "tool") {
-          lastInputAnchorIndex = static_cast<int64_t>(i);
-        }
-
-        if (jsonObj.find("content") == jsonObj.end()) {
-          const char* errorMsg = "content is required in the input\n";
-          throw qvac_errors::StatusError(
-              ADDON_ID, toString(NoContentProvided), errorMsg);
-        }
-        auto content = jsonObj["content"].get<std::string>();
-
-        if (jsonObj.find("type") != jsonObj.end() &&
-            jsonObj["type"].get<std::string>() == "media") {
-          if (state_->isTextLlm_) {
-            const char* errorMsg = "Media not supported by text-only models";
-            throw qvac_errors::StatusError(
-                ADDON_ID, toString(MediaNotSupported), errorMsg);
-          }
-
-          if (!content.empty()) {
-            state_->llmContext_->loadMedia(content);
-          }
-          addMediaPlaceholder++;
-          isNextUser = true;
-          continue;
-        }
-        if (newMsg.role == "user" && isNextUser) {
-          isNextUser = false;
-          while (addMediaPlaceholder > 0) {
-            addMediaPlaceholder--;
-            content.insert(0, mtmd_default_marker());
-          }
-        }
-        if (newMsg.role != "user" && isNextUser) {
-          state_->llmContext_->resetMedia();
-          std::string errorMsg = string_format(
-              "%s: Must append a user question after loading "
-              "media\n",
-              __func__);
-          throw qvac_errors::StatusError(
-              ADDON_ID, toString(UserMessageNotProvided), errorMsg);
-        }
-        newMsg.content = content;
-        chatMsgs.push_back(newMsg);
-        if (firstToolIndex >= 0) {
-          hasNonToolAfterFirstTool = true;
-        }
-      }
-    }
-
-    if (toolsCompactEnabled) {
-      if (tools.empty()) {
-        std::string errorMsg = string_format(
-            "%s: tools_compact requires non-empty tools attached to the last "
-            "user message\n",
-            __func__);
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            errorMsg);
-      }
-      if (lastInputAnchorIndex < 0) {
-        std::string errorMsg = string_format(
-            "%s: tools_compact requires a user or tool message before tools\n",
-            __func__);
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            errorMsg);
-      }
-      if (hasSplitToolBlock || firstToolIndex != (lastInputAnchorIndex + 1)) {
-        std::string errorMsg = string_format(
-            "%s: tools_compact requires tools to be a contiguous block "
-            "immediately after the last user or tool message\n",
-            __func__);
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            errorMsg);
-      }
-    }
-
-    if (addMediaPlaceholder > 0) {
-      state_->llmContext_->resetMedia();
-      std::string errorMsg =
-          string_format("%s: No request for media was made\n", __func__);
-      throw qvac_errors::StatusError(
-          ADDON_ID, toString(MediaRequestNotProvided), errorMsg);
-    }
-  }
-  if (!err.empty()) {
-    state_->llmContext_->resetMedia();
-    std::string errorMsg =
-        string_format("%s: Invalid input format: %s\n", __func__, err.c_str());
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(InvalidInputFormat), errorMsg);
-  }
-  return {chatMsgs, tools};
-}
 
 void LlamaModel::resetState(bool resetStats) {
   state_->llmContext_->setNDiscarded(state_->configuredNDiscarded_);
@@ -1129,14 +878,16 @@ void LlamaModel::resetState(bool resetStats) {
 
 std::unique_ptr<LlmContext> LlamaModel::createContext(
     std::string&& projectionPath, common_params& params,
-    common_init_result&& llamaInit, bool toolsCompact) {
+    common_init_result&& llamaInit,
+    std::shared_ptr<qvac_lib_inference_addon_llama::runtime::CompactionPolicy>
+        compactionPolicy) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
     return std::make_unique<MtmdLlmContext>(
-        params, std::move(llamaInit), toolsCompact);
+        params, std::move(llamaInit), compactionPolicy);
   }
   return std::make_unique<TextLlmContext>(
-      params, std::move(llamaInit), toolsCompact);
+      params, std::move(llamaInit), std::move(compactionPolicy));
 }
 
 bool LlamaModel::loadMedia(const std::vector<uint8_t>& input) {
