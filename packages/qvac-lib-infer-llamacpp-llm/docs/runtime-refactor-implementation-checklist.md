@@ -18,7 +18,7 @@ Update this section after each completed step/commit.
 
 | Commit | Title | Status | Branch/Commit | Date | Notes |
 | --- | --- | --- | --- | --- | --- |
-| 0 | Baseline Safety Net | planned | - | - | - |
+| 0 | Baseline Safety Net | done | local baseline (no code changes) | 2026-04-15 | Sharded tests fail when shard models are absent; baseline captured before refactor |
 | 1 | Runtime Scaffolding | planned | - | - | - |
 | 2 | Runtime State Facade | planned | - | - | - |
 | 3 | Prompt Policy | planned | - | - | - |
@@ -69,6 +69,22 @@ Append new entries at the top (most recent first).
 - Notes/Risks:
 - Next:
 -->
+
+#### Progress Update - Commit 0: Baseline Safety Net
+
+- Status: done
+- Scope completed:
+  - Captured pre-refactor baseline without runtime logic changes.
+  - Confirmed and documented sharded-model test failures caused by missing local shard files.
+  - Recorded additional known baseline failures to prevent refactor blame confusion.
+- Tests run:
+  - `npm run test:cpp` -> failed (baseline failures present before refactor work)
+  - `npm run test:integration` -> blocked/stalled during model download (`AfriqueGemma-4B.Q4_K_M.gguf`)
+- Notes/Risks:
+  - Sharded tests requiring `Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf` fail when shard assets are not present locally.
+  - Additional current baseline failures include several `CacheManagementQwen3Test` cases, `TextLlmContextQwen3Test.DoubleTokenizeBoundaryAccuracy`, and `ModelToolsQwen3Test.CacheEnabledWithToolMessage`.
+- Next:
+  - Commit 1 - Runtime Scaffolding
 
 ## Commit 0 - Baseline Safety Net
 
