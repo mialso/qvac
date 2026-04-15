@@ -1,0 +1,448 @@
+# Runtime Refactor Implementation Checklist (Commit-by-Commit)
+
+This checklist breaks the `runtime` refactor into small, mergeable commits.  
+You can group these commits into multiple PRs or squash into one larger PR later.
+
+## Conventions for This Refactor
+
+- Keep behavior stable unless a commit explicitly states behavior change.
+- Prefer extraction + delegation first, logic movement second.
+- Keep each commit buildable and testable on its own.
+- Avoid large file moves until late phase.
+
+## Progress Tracking
+
+Update this section after each completed step/commit.
+
+### Commit Status Board
+
+| Commit | Title | Status | Branch/Commit | Date | Notes |
+| --- | --- | --- | --- | --- | --- |
+| 0 | Baseline Safety Net | planned | - | - | - |
+| 1 | Runtime Scaffolding | planned | - | - | - |
+| 2 | Runtime State Facade | planned | - | - | - |
+| 3 | Prompt Policy | planned | - | - | - |
+| 4 | Cache Session Policy | planned | - | - | - |
+| 5 | Generation Params Policy | planned | - | - | - |
+| 6 | Post-Run Policy | planned | - | - | - |
+| 7 | Model Profiles | planned | - | - | - |
+| 8 | Pipeline as Primary Orchestrator | planned | - | - | - |
+| 9 | Context Folder Normalization (optional) | planned | - | - | - |
+| 10 | Cleanup + Dead Code Removal | planned | - | - | - |
+
+Status values:
+
+- `planned`
+- `in_progress`
+- `done`
+- `blocked`
+- `skipped`
+
+### Step Update Template
+
+Use this template immediately after each step (or commit):
+
+```md
+#### Progress Update - Commit <N>: <Title>
+
+- Status: done | blocked
+- Scope completed:
+  - <bullet 1>
+  - <bullet 2>
+- Tests run:
+  - <test command/result>
+- Notes/Risks:
+  - <optional>
+- Next:
+  - Commit <N+1> - <Title>
+```
+
+### Step Update Log
+
+Append new entries at the top (most recent first).
+
+<!--
+#### Progress Update - Commit X: Title
+- Status:
+- Scope completed:
+- Tests run:
+- Notes/Risks:
+- Next:
+-->
+
+## Commit 0 - Baseline Safety Net
+
+### Goal
+
+Capture a clean baseline before structural changes.
+
+### Changes
+
+- No runtime logic changes.
+- Add/refresh documentation pointers if needed:
+  - `docs/runtime-refactor-plan.md`
+  - this checklist file
+
+### Validation
+
+- Ensure current unit/integration tests are green before starting.
+- Record baseline failures (if any) to avoid refactor blame confusion.
+
+---
+
+## Commit 1 - Add Runtime Scaffolding (No Behavior Change)
+
+### Goal
+
+Introduce `runtime` skeleton with zero logic migration.
+
+### Changes
+
+- Add:
+  - `addon/src/runtime/RunRequest.hpp`
+  - `addon/src/runtime/RunPipeline.hpp`
+  - `addon/src/runtime/RunPipeline.cpp`
+- `RunPipeline` initially wraps existing `LlamaModel::processPrompt` path.
+- Keep `LlamaModel` as owner; pipeline is a thin delegate.
+
+### Acceptance Criteria
+
+- No observable behavior change.
+- `LlamaModel` still passes all existing tests.
+
+---
+
+## Commit 2 - Introduce Runtime State Facade
+
+### Goal
+
+Define explicit inputs/outputs between orchestrator and model internals.
+
+### Changes
+
+- Add minimal internal facade types (names can vary):
+  - `RuntimeDeps` (context, cache manager access, formatting callback)
+  - `RunResult` (generated string, flags for post-run)
+- Keep actual logic in old methods; just formalize data passing.
+
+### Acceptance Criteria
+
+- Existing tests unchanged.
+- No net behavior differences.
+
+---
+
+## Commit 3 - Extract Prompt Policy (Read-Only Move)
+
+### Goal
+
+Move prompt parsing/validation from `LlamaModel::formatPrompt` into policy class.
+
+### Changes
+
+- Add:
+  - `addon/src/runtime/policies/prompt/PromptPolicy.hpp`
+  - `addon/src/runtime/policies/prompt/PromptPolicy.cpp`
+- Move logic for:
+  - chat/tool extraction
+  - media placeholder rules
+  - tools_compact shape constraints
+- Keep same errors/messages where possible.
+- `LlamaModel` now delegates prompt resolution to policy.
+
+### Acceptance Criteria
+
+- Prompt-related unit tests still pass:
+  - tools/tool-compact tests
+  - text/multimodal prompt parsing tests
+
+---
+
+## Commit 4 - Extract Cache Session Policy
+
+### Goal
+
+Move session decision logic out of `LlamaModel::resolveChatAndTools`.
+
+### Changes
+
+- Add:
+  - `addon/src/runtime/policies/cache/CacheSessionPolicy.hpp`
+  - `addon/src/runtime/policies/cache/CacheSessionPolicy.cpp`
+- Policy decides:
+  - no cache key path
+  - same key reuse path
+  - switch key path
+  - whether reset-after-inference should happen
+- Keep `CacheManager` for file load/save/invalidate operations.
+
+### Acceptance Criteria
+
+- Cache behavior parity:
+  - no-cache single-shot behavior
+  - same-key continuation
+  - key switching save/load behavior
+  - save-to-disk semantics
+
+---
+
+## Commit 5 - Extract Generation Params Policy
+
+### Goal
+
+Isolate per-run generation override/restore orchestration.
+
+### Changes
+
+- Add:
+  - `addon/src/runtime/policies/generation/GenerationParamsPolicy.hpp`
+  - `addon/src/runtime/policies/generation/GenerationParamsPolicy.cpp`
+- Wrap `applyGenerationParams(...)`/restore lifecycle in policy.
+- Keep context-specific implementation in `TextLlmContext` and `MtmdLlmContext`.
+
+### Acceptance Criteria
+
+- Generation-params integration tests remain green.
+- No regression in default sampling behavior when overrides are absent.
+
+---
+
+## Commit 6 - Extract Post-Run Policy
+
+### Goal
+
+Move end-of-run cleanup/persistence/trim logic into one place.
+
+### Changes
+
+- Add:
+  - `addon/src/runtime/policies/postrun/PostRunPolicy.hpp`
+  - `addon/src/runtime/policies/postrun/PostRunPolicy.cpp`
+- Migrate logic for:
+  - tools_compact post-generation trim checks
+  - optional cache save
+  - reset/no-reset decisions
+  - debug stats boundary bookkeeping
+
+### Acceptance Criteria
+
+- tools_compact chain behavior unchanged.
+- post-run cache persistence unchanged.
+
+---
+
+## Commit 7 - Introduce Model Profiles (Default + Qwen3)
+
+### Goal
+
+Separate model-family-specific behavior from generic runtime flow.
+
+### Changes
+
+- Add:
+  - `addon/src/profile/ModelProfile.hpp`
+  - `addon/src/profile/DefaultProfile.*`
+  - `addon/src/profile/Qwen3Profile.*`
+- Start by moving minimal responsibilities:
+  - qwen3 detection/capability exposure
+  - chat template selection hooks
+- Keep reasoning token behavior where it currently lives for now.
+
+### Acceptance Criteria
+
+- Non-qwen models unaffected.
+- Qwen3 template behavior unchanged.
+
+---
+
+## Commit 8 - Wire RunPipeline as Primary Orchestrator
+
+### Goal
+
+Switch `LlamaModel::processPromptImpl` to explicit pipeline stage calls.
+
+### Changes
+
+- `RunPipeline` becomes authoritative flow:
+  1. cache policy prepare
+  2. prompt policy resolve
+  3. generation param policy apply
+  4. eval
+  5. generate/prefill branch
+  6. post-run policy finalize
+- Keep `LlamaModel` as lifecycle owner and adapter boundary.
+
+### Acceptance Criteria
+
+- Full test suite parity.
+- Reduced complexity in `processPromptImpl`.
+
+---
+
+## Commit 9 - Context Folder Normalization (Optional)
+
+### Goal
+
+Perform file/folder moves only after stable behavior.
+
+### Changes
+
+- If desired, normalize paths:
+  - keep `context/*` for context implementations
+  - keep `runtime/*` for orchestration/policies
+  - keep `profile/*` for model-specific behavior
+- Update includes and CMake lists only.
+
+### Acceptance Criteria
+
+- No behavior change.
+- Clean compile and test.
+
+---
+
+## Commit 10 - Cleanup + Dead Code Removal
+
+### Goal
+
+Remove obsolete wrappers and duplicated code paths.
+
+### Changes
+
+- Delete old helper methods in `LlamaModel` that are now policy-owned.
+- Keep method names only where public/internal interfaces still require them.
+- Add short architecture comments near main orchestration entrypoints.
+
+### Acceptance Criteria
+
+- No duplicate logic remains in old and new paths.
+- Final behavior and tests still match baseline.
+
+---
+
+## Recommended Test Focus per Commit
+
+- **Prompt policy commits:** tools, tools_compact, multimodal prompt parsing, malformed input errors.
+- **Cache policy commits:** cache state machine tests, cache switching, save/load persistence, no-cache resets.
+- **Post-run commits:** tools_compact trimming and boundary stats.
+- **Pipeline wiring commits:** api behavior tests, single-job behavior, generation params, sliding context.
+
+## Optional Stretch Commits (After Main Refactor)
+
+- Move overflow/discard algorithm into dedicated overflow policy object shared by text + multimodal contexts.
+- Move qwen3 reasoning EOS replacement behind profile hook interface.
+- Add focused unit tests for each policy class independent of full model setup.
+
+## Done Definition
+
+- `LlamaModel` is no longer the monolithic runtime decision hub.
+- Run-time branching is explicit and stage-based.
+- Policy objects are testable in isolation.
+- Existing public API and behavior remain compatible.
+
+---
+
+## Execution Tracks
+
+This checklist supports two execution styles.
+
+## Track A (Full) - 10 Commits
+
+Use when:
+
+- you want low-risk, highly reviewable slices
+- you want clean bisectability
+- multiple reviewers may inspect different parts
+
+Sequence:
+
+1. Commit 0 - Baseline Safety Net
+2. Commit 1 - Runtime Scaffolding
+3. Commit 2 - Runtime State Facade
+4. Commit 3 - Prompt Policy
+5. Commit 4 - Cache Session Policy
+6. Commit 5 - Generation Params Policy
+7. Commit 6 - Post-Run Policy
+8. Commit 7 - Model Profiles
+9. Commit 8 - Pipeline as Primary Orchestrator
+10. Commit 10 - Cleanup + Dead Code Removal
+
+Optional between 9 and 10:
+
+- Commit 9 - Context Folder Normalization
+
+Note: this is the default recommended path for safety and traceability.
+
+## Track B (Compact) - 5 Commits
+
+Use when:
+
+- you prefer fewer rebases/cherry-picks
+- a single owner is driving the refactor end-to-end
+- you still want logical checkpoints without maximum granularity
+
+### B1 - Foundation
+
+Combines:
+
+- Commit 0
+- Commit 1
+- Commit 2
+
+Output:
+
+- runtime skeleton + request/facade types in place, no behavior change
+
+### B2 - Prompt + Cache Policies
+
+Combines:
+
+- Commit 3
+- Commit 4
+
+Output:
+
+- prompt parsing/validation extracted
+- cache session decisions extracted
+
+### B3 - Generation + Post-Run Policies
+
+Combines:
+
+- Commit 5
+- Commit 6
+
+Output:
+
+- generation override orchestration extracted
+- finalize/trim/save/reset logic extracted
+
+### B4 - Profiles + Pipeline Switch
+
+Combines:
+
+- Commit 7
+- Commit 8
+
+Output:
+
+- model profile split introduced
+- `RunPipeline` becomes primary orchestrator
+
+### B5 - Cleanup (and Optional Moves)
+
+Combines:
+
+- Commit 10
+- optional Commit 9
+
+Output:
+
+- dead code removed
+- optional folder normalization completed
+
+## Recommendation
+
+- Prefer **Track A (10 commits)** for maintainability and safer rollback.
+- Use **Track B (5 commits)** if you need faster delivery with fewer integration points.
+
+
